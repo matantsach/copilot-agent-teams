@@ -106,4 +106,41 @@ describe("Task Board Tools", () => {
     const content = JSON.parse((result.content as any)[0].text);
     expect(content).toHaveLength(2);
   });
+
+  it("approve_task via MCP tool", async () => {
+    const team = db.createTeam("Test", { review_required: true });
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    db.updateTask(task.id, "completed", "Done");
+    expect(db.getTask(task.id)!.status).toBe("needs_review");
+    const result = await client.callTool({ name: "approve_task", arguments: { task_id: task.id, agent_id: "lead" } });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("completed");
+  });
+
+  it("reject_task via MCP tool", async () => {
+    const team = db.createTeam("Test", { review_required: true });
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    db.updateTask(task.id, "completed", "Done");
+    const result = await client.callTool({ name: "reject_task", arguments: { task_id: task.id, agent_id: "lead", feedback: "Needs more work" } });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("in_progress");
+  });
+
+  it("update_task routes to needs_review when review_required", async () => {
+    const team = db.createTeam("Test", { review_required: true });
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    const result = await client.callTool({ name: "update_task", arguments: { task_id: task.id, status: "completed", result: "Done" } });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("needs_review");
+  });
 });

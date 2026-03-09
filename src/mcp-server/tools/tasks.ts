@@ -77,10 +77,40 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
     }
   );
 
+  server.tool("approve_task", "Approve a task in needs_review status (lead-only)",
+    { task_id: z.number(), agent_id: agentIdSchema },
+    async ({ task_id, agent_id }) => {
+      try {
+        const existingTask = db.getTask(task_id);
+        if (!existingTask) throw new Error(`Task ${task_id} not found`);
+        db.getActiveTeam(existingTask.team_id);
+        const task = db.approveTask(task_id, agent_id);
+        return { content: [{ type: "text", text: JSON.stringify(task) }] };
+      } catch (e: any) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+
+  server.tool("reject_task", "Reject a task in needs_review status with feedback (lead-only)",
+    { task_id: z.number(), agent_id: agentIdSchema, feedback: z.string().max(10000) },
+    async ({ task_id, agent_id, feedback }) => {
+      try {
+        const existingTask = db.getTask(task_id);
+        if (!existingTask) throw new Error(`Task ${task_id} not found`);
+        db.getActiveTeam(existingTask.team_id);
+        const task = db.rejectTask(task_id, agent_id, feedback);
+        return { content: [{ type: "text", text: JSON.stringify(task) }] };
+      } catch (e: any) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+
   server.tool("list_tasks", "List tasks with optional filters and pagination",
     {
       team_id: z.string(),
-      status: z.enum(["pending", "in_progress", "completed", "blocked"]).optional(),
+      status: z.enum(["pending", "in_progress", "completed", "blocked", "needs_review"]).optional(),
       assigned_to: z.string().optional(),
       limit: z.number().optional(),
       offset: z.number().optional(),
