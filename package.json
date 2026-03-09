@@ -1,0 +1,29 @@
+{
+  "name": "copilot-agent-teams",
+  "version": "0.1.0",
+  "description": "Multi-agent team coordination plugin for GitHub Copilot CLI",
+  "type": "commonjs",
+  "main": "dist/mcp-server/index.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "dev": "tsx src/mcp-server/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "node-sqlite3-wasm": "^0.8.54",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.5",
+    "esbuild": "^0.27.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

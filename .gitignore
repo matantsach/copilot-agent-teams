@@ -1,0 +1,4 @@
+node_modules/
+.copilot-teams/
+*.db
+src/**/*.js
