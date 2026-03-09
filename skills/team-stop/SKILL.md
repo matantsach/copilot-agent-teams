@@ -1,9 +1,18 @@
 ---
 name: team-stop
-description: Stop an active agent team and collect results
+description: Use when the user wants to stop a running team, collect results, or wind down agent coordination — e.g. "stop the team" or "wrap up"
 ---
 
-Stop a team by calling `copilot-agent-teams/stop_team`.
+# Stop a Team
 
-Display the completed task results as a summary.
-If tasks are still in progress, warn the user before stopping.
+Stop an active team and present the collected results.
+
+## Steps
+
+1. Call `copilot-agent-teams/team_status` to check current state
+2. If tasks are still `in_progress` or `pending`, warn the user and ask for confirmation
+3. Call `copilot-agent-teams/stop_team` with `team_id` and optional `reason`
+4. Present a summary:
+   - Completed tasks with their `result` summaries
+   - Count of incomplete tasks (if any)
+   - Overall outcome relative to the original goal

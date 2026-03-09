@@ -1,14 +1,21 @@
 ---
 name: team-start
-description: Start a new agent team to work on a complex goal
+description: Use when the user wants to break a complex goal into parallel subtasks worked on by multiple agents — e.g. "use a team to refactor the auth module" or "parallelize this across agents"
 ---
 
-Start a new agent team by calling `copilot-agent-teams/create_team` with the user's goal, then invoke the `team-lead` agent to orchestrate the work.
+# Start an Agent Team
 
-Steps:
-1. Call `copilot-agent-teams/create_team` with the goal argument
-2. Note the returned `team_id`
-3. Invoke the `team-lead` agent with the goal and team_id
+Create a team and hand off to the team-lead agent for orchestration.
 
-Tip: Run inside a tmux session for parallel teammates with live progress.
-Set `TEAMMATE_MODEL` to customize the model (default: claude-sonnet-4-6).
+## Steps
+
+1. Confirm the goal with the user — summarize what the team will accomplish
+2. Call `copilot-agent-teams/create_team` with `goal` set to the confirmed goal
+3. Note the returned `team_id`
+4. Invoke the `team-lead` agent with: `"Team <team_id> — goal: <goal>"`
+
+## Tips
+
+- Run inside **tmux** for parallel teammates with live progress in separate panes
+- Set `TEAMMATE_MODEL` env var to customize teammate model (default: `claude-sonnet-4-6`)
+- The team-lead will handle task decomposition, spawning, and coordination

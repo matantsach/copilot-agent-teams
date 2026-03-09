@@ -1,12 +1,18 @@
 ---
 name: team-status
-description: Show the status of an active agent team
+description: Use when the user asks about team progress, active teams, or task completion — e.g. "how's the team doing" or "show team status"
 ---
 
-Show team status by calling `copilot-agent-teams/team_status`.
+# Check Team Status
 
-If no team_id is provided, list recent teams from the database.
-Format the output as a readable dashboard showing:
-- Team goal and status
-- Member list with roles
-- Task counts by status (pending, in_progress, completed, blocked)
+Show a dashboard of team progress.
+
+## Steps
+
+1. Call `copilot-agent-teams/team_status` with the `team_id`
+   - If the user didn't specify a team, check the session context or ask which team
+2. Format the response as a readable dashboard:
+   - **Team**: goal and status
+   - **Members**: name and role for each
+   - **Tasks**: counts by status (pending / in_progress / completed / blocked)
+3. Highlight any blocked tasks or teammates that appear stuck
