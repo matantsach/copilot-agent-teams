@@ -447,6 +447,14 @@ export class TeamDB {
     }
   }
 
+  countUnread(teamId: string, agentId: string): number {
+    const row = this.db.get(
+      "SELECT COUNT(*) as count FROM messages WHERE team_id = ? AND to_agent = ? AND read = 0",
+      [teamId, agentId]
+    ) as { count: number } | undefined;
+    return row?.count ?? 0;
+  }
+
   // --- Audit Log ---
 
   logAction(teamId: string, agentId: string, actionType: string, taskId?: number, detail?: string): void {

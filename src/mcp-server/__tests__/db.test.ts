@@ -397,5 +397,23 @@ describe("TeamDB", () => {
       expect(db.getMessages(team.id, "teammate-1")).toHaveLength(1);
       expect(db.getMessages(team.id, "teammate-1")).toHaveLength(0);
     });
+
+    it("countUnread returns unread message count without consuming", () => {
+      const team = db.createTeam("count test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+
+      db.sendMessage(team.id, "lead", "teammate-1", "msg 1");
+      db.sendMessage(team.id, "lead", "teammate-1", "msg 2");
+      db.sendMessage(team.id, "lead", "teammate-1", "msg 3");
+
+      expect(db.countUnread(team.id, "teammate-1")).toBe(3);
+      expect(db.countUnread(team.id, "lead")).toBe(0);
+
+      // Consuming messages should NOT affect a prior countUnread result,
+      // but a subsequent countUnread should reflect the change
+      db.getMessages(team.id, "teammate-1");
+      expect(db.countUnread(team.id, "teammate-1")).toBe(0);
+    });
   });
 });
