@@ -352,6 +352,59 @@ export class TeamDB {
     return this.getTask(id)!;
   }
 
+  steerTeammate(teamId: string, callerAgentId: string, targetAgentId: string, directive: string, reassign?: boolean): void {
+    const members = this.getMembers(teamId);
+    const caller = members.find(m => m.agent_id === callerAgentId);
+    if (!caller || caller.role !== "lead") {
+      throw new Error("Only the team lead can steer teammates");
+    }
+
+    if (!members.find(m => m.agent_id === targetAgentId)) {
+      throw new Error(`Agent '${targetAgentId}' is not a member of team '${teamId}'`);
+    }
+
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const now = Date.now();
+
+      // Send priority message
+      this.db.run(
+        "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        [teamId, callerAgentId, targetAgentId, `[PRIORITY] ${directive}`, now]
+      );
+
+      // Optionally reassign the teammate's current in_progress task
+      if (reassign) {
+        const tasks = this.db.all(
+          "SELECT id FROM tasks WHERE team_id = ? AND assigned_to = ? AND status = 'in_progress'",
+          [teamId, targetAgentId]
+        ) as Array<{ id: number }>;
+
+        if (tasks.length === 0) {
+          throw new Error(`No in_progress task found for '${targetAgentId}' to reassign`);
+        }
+
+        for (const task of tasks) {
+          this.db.run(
+            "UPDATE tasks SET status = 'pending', assigned_to = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?",
+            [now, task.id]
+          );
+        }
+      }
+
+      // Log the steering action
+      this.db.run(
+        "INSERT INTO agent_actions (team_id, agent_id, task_id, action_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, Date.now()]
+      );
+
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
   countTasks(teamId: string): Record<TaskStatus | "total", number> {
     const rows = this.db.all(
       "SELECT status, COUNT(*) as count FROM tasks WHERE team_id = ? GROUP BY status",

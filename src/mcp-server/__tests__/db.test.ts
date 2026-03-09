@@ -416,4 +416,63 @@ describe("TeamDB", () => {
       expect(db.countUnread(team.id, "teammate-1")).toBe(0);
     });
   });
+
+  describe("steerTeammate", () => {
+    it("steerTeammate sends priority message to teammate", () => {
+      const team = db.createTeam("steer test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+
+      db.steerTeammate(team.id, "lead", "teammate-1", "Stop, use approach Y instead");
+
+      const msgs = db.getMessages(team.id, "teammate-1");
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].content).toBe("[PRIORITY] Stop, use approach Y instead");
+      expect(msgs[0].from_agent).toBe("lead");
+    });
+
+    it("steerTeammate with reassign resets task to pending", () => {
+      const team = db.createTeam("steer reassign test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+
+      db.steerTeammate(team.id, "lead", "teammate-1", "Task is too complex, reassigning", true);
+
+      const msgs = db.getMessages(team.id, "teammate-1");
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].content).toContain("[PRIORITY]");
+
+      const updated = db.getTask(task.id);
+      expect(updated!.status).toBe("pending");
+      expect(updated!.assigned_to).toBeNull();
+      expect(updated!.claimed_at).toBeNull();
+    });
+
+    it("steerTeammate rejects non-lead callers", () => {
+      const team = db.createTeam("steer auth test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.addMember(team.id, "teammate-2", "teammate");
+
+      expect(() => db.steerTeammate(team.id, "teammate-1", "teammate-2", "Do X")).toThrow("Only the team lead");
+    });
+
+    it("steerTeammate rolls back message if reassign fails", () => {
+      const team = db.createTeam("steer rollback test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      // Task is pending, not in_progress — reassign should fail
+
+      expect(() => db.steerTeammate(team.id, "lead", "teammate-1", "Reassigning", true)).toThrow();
+
+      // Message should NOT have been sent (transaction rolled back)
+      const msgs = db.getMessages(team.id, "teammate-1");
+      expect(msgs).toHaveLength(0);
+    });
+  });
 });
