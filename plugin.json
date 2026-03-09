@@ -1,0 +1,9 @@
+{
+  "name": "copilot-agent-teams",
+  "description": "Multi-agent team coordination — shared task boards, messaging, and team orchestration",
+  "version": "0.1.0",
+  "agents": "agents/",
+  "skills": ["skills/"],
+  "hooks": "hooks.json",
+  "mcpServers": ".mcp.json"
+}

@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "copilot-agent-teams": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/mcp-server/index.js"]
+    }
+  }
+}
