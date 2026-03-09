@@ -31968,6 +31968,123 @@ function registerMessagingTools(server2, db2) {
   );
 }
 
+// src/mcp-server/tools/github.ts
+var import_child_process = require("child_process");
+var import_fs = require("fs");
+var import_path = require("path");
+var import_os = require("os");
+function registerGithubTools(server2, db2) {
+  server2.tool(
+    "create_tasks_from_issues",
+    "Create tasks from GitHub issues",
+    {
+      team_id: external_exports.string(),
+      agent_id: agentIdSchema,
+      issue_numbers: external_exports.array(external_exports.number()),
+      repo: external_exports.string().optional()
+    },
+    async ({ team_id, agent_id, issue_numbers, repo }) => {
+      try {
+        db2.getActiveTeam(team_id);
+        if (!db2.isMember(team_id, agent_id)) {
+          throw new Error(`Agent '${agent_id}' is not a member of team '${team_id}'`);
+        }
+        const tasks = [];
+        for (const num of issue_numbers) {
+          try {
+            const repoFlag = repo ? `-R ${repo}` : "";
+            const issueJson = (0, import_child_process.execSync)(
+              `gh issue view ${num} ${repoFlag} --json title,body,labels`,
+              { encoding: "utf-8", timeout: 15e3 }
+            ).trim();
+            const issue2 = JSON.parse(issueJson);
+            const labels = (issue2.labels || []).map((l) => l.name).join(", ");
+            const description = [
+              `GitHub Issue #${num}`,
+              labels ? `Labels: ${labels}` : "",
+              "",
+              issue2.body || "(no description)"
+            ].filter(Boolean).join("\n");
+            const task = db2.createTask(team_id, issue2.title, description);
+            tasks.push({ issue_number: num, task_id: task.id, title: issue2.title });
+          } catch (issueErr) {
+            tasks.push({ issue_number: num, error: issueErr.message });
+          }
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ created: tasks.filter((t) => !("error" in t)).length, tasks }) }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+  server2.tool(
+    "create_pr",
+    "Create a GitHub pull request from the current branch",
+    {
+      team_id: external_exports.string(),
+      agent_id: agentIdSchema,
+      title: external_exports.string().optional(),
+      body: external_exports.string().optional(),
+      base: external_exports.string().optional()
+    },
+    async ({ team_id, agent_id, title, body, base }) => {
+      try {
+        const team = db2.getTeam(team_id);
+        if (!team) throw new Error(`Team '${team_id}' not found`);
+        const prTitle = title || team.goal;
+        let prBody = body;
+        if (!prBody) {
+          const completed = db2.listTasks(team_id, { status: "completed", limit: 100 });
+          const lines = completed.map((t) => `- **${t.subject}**: ${t.result || "completed"}`);
+          prBody = [
+            "## Summary",
+            `Team goal: ${team.goal}`,
+            "",
+            "## Completed Tasks",
+            ...lines,
+            "",
+            `Created by copilot-agent-teams (team ${team_id})`
+          ].join("\n");
+        }
+        const baseFlag = base ? `--base ${base}` : "";
+        try {
+          (0, import_child_process.execSync)("git add -A && git commit -m 'chore: teammate work product' --allow-empty", {
+            encoding: "utf-8",
+            timeout: 15e3,
+            stdio: "pipe"
+          });
+        } catch {
+        }
+        try {
+          (0, import_child_process.execSync)("git push -u origin HEAD", {
+            encoding: "utf-8",
+            timeout: 3e4,
+            stdio: "pipe"
+          });
+        } catch (pushErr) {
+          throw new Error(`Failed to push branch: ${pushErr.message}`);
+        }
+        const bodyFile = (0, import_path.join)((0, import_os.tmpdir)(), `pr-body-${Date.now()}.md`);
+        (0, import_fs.writeFileSync)(bodyFile, prBody);
+        try {
+          const prOutput = (0, import_child_process.execSync)(
+            `gh pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}" ${baseFlag}`,
+            { encoding: "utf-8", timeout: 3e4 }
+          ).trim();
+          return { content: [{ type: "text", text: JSON.stringify({ pr_url: prOutput }) }] };
+        } finally {
+          try {
+            (0, import_fs.unlinkSync)(bodyFile);
+          } catch {
+          }
+        }
+      } catch (e) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+}
+
 // src/mcp-server/server.ts
 function createServer(dbPath) {
   const server2 = new McpServer({ name: "copilot-agent-teams", version: "0.1.0" });
@@ -31975,15 +32092,16 @@ function createServer(dbPath) {
   registerTeamTools(server2, db2);
   registerTaskTools(server2, db2);
   registerMessagingTools(server2, db2);
+  registerGithubTools(server2, db2);
   return { server: server2, db: db2 };
 }
 
 // src/mcp-server/index.ts
-var import_fs = require("fs");
-var import_path = require("path");
-var dbDir = (0, import_path.join)(process.cwd(), ".copilot-teams");
-(0, import_fs.mkdirSync)(dbDir, { recursive: true });
-var { server, db } = createServer((0, import_path.join)(dbDir, "teams.db"));
+var import_fs2 = require("fs");
+var import_path2 = require("path");
+var dbDir = (0, import_path2.join)(process.cwd(), ".copilot-teams");
+(0, import_fs2.mkdirSync)(dbDir, { recursive: true });
+var { server, db } = createServer((0, import_path2.join)(dbDir, "teams.db"));
 function shutdown() {
   try {
     db.close();
