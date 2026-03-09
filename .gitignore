@@ -2,3 +2,5 @@ node_modules/
 .copilot-teams/
 *.db
 src/**/*.js
+*.tsbuildinfo
+.DS_Store

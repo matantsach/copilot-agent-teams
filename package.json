@@ -11,6 +11,18 @@
     "test:watch": "vitest"
   },
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mtsach/copilot-agent-teams.git"
+  },
+  "keywords": [
+    "copilot",
+    "multi-agent",
+    "mcp",
+    "agent-teams",
+    "coordination",
+    "task-board"
+  ],
   "engines": {
     "node": ">=20"
   },
