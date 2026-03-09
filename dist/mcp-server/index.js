@@ -31500,6 +31500,7 @@ var TeamDB = class _TeamDB {
         agent_id TEXT NOT NULL,
         role TEXT DEFAULT 'teammate' CHECK(role IN ('lead','teammate')),
         status TEXT DEFAULT 'active' CHECK(status IN ('active','idle','finished')),
+        worktree_path TEXT,
         PRIMARY KEY (team_id, agent_id)
       );
       CREATE INDEX IF NOT EXISTS idx_tasks_team_status ON tasks(team_id, status);
@@ -31544,9 +31545,12 @@ var TeamDB = class _TeamDB {
     if (result.changes === 0) throw new Error(`Team '${id}' not found`);
   }
   // --- Members ---
-  addMember(teamId, agentId, role) {
-    this.db.run("INSERT OR IGNORE INTO members (team_id, agent_id, role, status) VALUES (?, ?, ?, 'active')", [teamId, agentId, role]);
-    return { team_id: teamId, agent_id: agentId, role, status: "active" };
+  addMember(teamId, agentId, role, worktreePath) {
+    this.db.run(
+      "INSERT OR IGNORE INTO members (team_id, agent_id, role, status, worktree_path) VALUES (?, ?, ?, 'active', ?)",
+      [teamId, agentId, role, worktreePath ?? null]
+    );
+    return { team_id: teamId, agent_id: agentId, role, status: "active", worktree_path: worktreePath ?? null };
   }
   isMember(teamId, agentId) {
     const row = this.db.get("SELECT 1 FROM members WHERE team_id = ? AND agent_id = ?", [teamId, agentId]);
@@ -31554,6 +31558,19 @@ var TeamDB = class _TeamDB {
   }
   getMembers(teamId) {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]);
+  }
+  updateMemberWorktree(teamId, agentId, worktreePath) {
+    const result = this.db.run(
+      "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",
+      [worktreePath, teamId, agentId]
+    );
+    if (result.changes === 0) throw new Error(`Member '${agentId}' not found in team '${teamId}'`);
+  }
+  getWorktrees(teamId) {
+    return this.db.all(
+      "SELECT agent_id, worktree_path FROM members WHERE team_id = ? AND worktree_path IS NOT NULL",
+      [teamId]
+    );
   }
   // --- Tasks ---
   createTask(teamId, subject, description, assignedTo, blockedBy) {

@@ -30,11 +30,13 @@ You are a team lead coordinating multiple agents to accomplish a complex goal.
 
 ## Spawning Teammates
 
-Try tmux first (parallel panes with live progress):
+Try tmux first (parallel panes with isolated worktrees):
 
 ```bash
 bash scripts/spawn-teammate.sh <team_id> <agent_id> "<task_description>" [model]
 ```
+
+Each teammate gets its own git worktree and branch (`team/<team_id>/<agent_id>`), eliminating file conflicts between concurrent agents.
 
 If output is `NOT_IN_TMUX`, fall back to the `agent` tool with prompt:
 > You are `<agent_id>` on team `<team_id>`. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: `<task_description>`
