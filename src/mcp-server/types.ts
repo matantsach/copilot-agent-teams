@@ -1,3 +1,7 @@
+import { z } from "zod";
+
+export const agentIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50);
+
 export type TeamStatus = "active" | "completed" | "stopped";
 export type TaskStatus = "pending" | "in_progress" | "completed" | "blocked";
 export type MemberRole = "lead" | "teammate";

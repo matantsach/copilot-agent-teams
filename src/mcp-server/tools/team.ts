@@ -1,8 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { TeamDB } from "../db.js";
-
-const agentIdSchema = z.string().regex(/^[a-z0-9-]+$/).max(50);
+import { agentIdSchema } from "../types.js";
 
 export function registerTeamTools(server: McpServer, db: TeamDB): void {
   server.tool("create_team", "Create a new agent team and register caller as lead",

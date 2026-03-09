@@ -31756,8 +31756,10 @@ var TeamDB = class _TeamDB {
   }
 };
 
-// src/mcp-server/tools/team.ts
+// src/mcp-server/types.ts
 var agentIdSchema = external_exports.string().regex(/^[a-z0-9-]+$/).max(50);
+
+// src/mcp-server/tools/team.ts
 function registerTeamTools(server2, db2) {
   server2.tool(
     "create_team",
@@ -31833,7 +31835,7 @@ function registerTaskTools(server2, db2) {
       team_id: external_exports.string(),
       subject: external_exports.string(),
       description: external_exports.string().optional(),
-      assigned_to: external_exports.string().regex(/^[a-z0-9-]+$/).max(50).optional(),
+      assigned_to: agentIdSchema.optional(),
       blocked_by: external_exports.array(external_exports.number()).optional()
     },
     async ({ team_id, subject, description, assigned_to, blocked_by }) => {
@@ -31849,7 +31851,7 @@ function registerTaskTools(server2, db2) {
   server2.tool(
     "claim_task",
     "Atomically claim a task \u2014 enforces blockers and pre-assignment",
-    { task_id: external_exports.number(), agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50) },
+    { task_id: external_exports.number(), agent_id: agentIdSchema },
     async ({ task_id, agent_id }) => {
       try {
         const existingTask = db2.getTask(task_id);
@@ -31885,9 +31887,12 @@ function registerTaskTools(server2, db2) {
   server2.tool(
     "reassign_task",
     "Reset a stuck in_progress task back to pending (lead-only, enforced)",
-    { task_id: external_exports.number(), agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50), reason: external_exports.string().optional() },
+    { task_id: external_exports.number(), agent_id: agentIdSchema, reason: external_exports.string().optional() },
     async ({ task_id, agent_id }) => {
       try {
+        const existingTask = db2.getTask(task_id);
+        if (!existingTask) throw new Error(`Task ${task_id} not found`);
+        db2.getActiveTeam(existingTask.team_id);
         const task = db2.reassignTask(task_id, agent_id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e) {
@@ -31917,12 +31922,11 @@ function registerTaskTools(server2, db2) {
 }
 
 // src/mcp-server/tools/messaging.ts
-var agentIdSchema2 = external_exports.string().regex(/^[a-z0-9-]+$/).max(50);
 function registerMessagingTools(server2, db2) {
   server2.tool(
     "send_message",
     "Send a direct message to a teammate",
-    { team_id: external_exports.string(), from: agentIdSchema2, to: agentIdSchema2, content: external_exports.string() },
+    { team_id: external_exports.string(), from: agentIdSchema, to: agentIdSchema, content: external_exports.string() },
     async ({ team_id, from, to, content }) => {
       try {
         db2.getActiveTeam(team_id);
@@ -31936,7 +31940,7 @@ function registerMessagingTools(server2, db2) {
   server2.tool(
     "broadcast",
     "Broadcast a message to all teammates",
-    { team_id: external_exports.string(), from: agentIdSchema2, content: external_exports.string() },
+    { team_id: external_exports.string(), from: agentIdSchema, content: external_exports.string() },
     async ({ team_id, from, content }) => {
       try {
         db2.getActiveTeam(team_id);
@@ -31950,7 +31954,7 @@ function registerMessagingTools(server2, db2) {
   server2.tool(
     "get_messages",
     "Poll inbox \u2014 returns unread messages, marks as read",
-    { team_id: external_exports.string(), for_agent: agentIdSchema2, since: external_exports.number().optional() },
+    { team_id: external_exports.string(), for_agent: agentIdSchema, since: external_exports.number().optional() },
     async ({ team_id, for_agent, since }) => {
       try {
         const team = db2.getTeam(team_id);
