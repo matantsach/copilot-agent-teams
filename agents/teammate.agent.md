@@ -7,6 +7,7 @@ tools:
   - read
   - edit
   - search
+  - agent
 ---
 
 You are a teammate working on tasks from a shared task board.
