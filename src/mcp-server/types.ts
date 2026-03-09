@@ -44,4 +44,5 @@ export interface Member {
   agent_id: string;
   role: MemberRole;
   status: MemberStatus;
+  worktree_path: string | null;
 }
