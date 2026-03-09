@@ -31973,6 +31973,7 @@ var import_child_process = require("child_process");
 var import_fs = require("fs");
 var import_path = require("path");
 var import_os = require("os");
+var import_crypto2 = require("crypto");
 function registerGithubTools(server2, db2) {
   server2.tool(
     "create_tasks_from_issues",
@@ -31980,8 +31981,8 @@ function registerGithubTools(server2, db2) {
     {
       team_id: external_exports.string(),
       agent_id: agentIdSchema,
-      issue_numbers: external_exports.array(external_exports.number()),
-      repo: external_exports.string().optional()
+      issue_numbers: external_exports.array(external_exports.number().int().positive()).max(50),
+      repo: external_exports.string().regex(/^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/).optional()
     },
     async ({ team_id, agent_id, issue_numbers, repo }) => {
       try {
@@ -31992,11 +31993,13 @@ function registerGithubTools(server2, db2) {
         const tasks = [];
         for (const num of issue_numbers) {
           try {
-            const repoFlag = repo ? `-R ${repo}` : "";
-            const issueJson = (0, import_child_process.execSync)(
-              `gh issue view ${num} ${repoFlag} --json title,body,labels`,
-              { encoding: "utf-8", timeout: 15e3 }
-            ).trim();
+            const args = ["issue", "view", String(num)];
+            if (repo) args.push("-R", repo);
+            args.push("--json", "title,body,labels");
+            const issueJson = (0, import_child_process.execFileSync)("gh", args, {
+              encoding: "utf-8",
+              timeout: 15e3
+            }).trim();
             const issue2 = JSON.parse(issueJson);
             const labels = (issue2.labels || []).map((l) => l.name).join(", ");
             const description = [
@@ -32025,12 +32028,15 @@ function registerGithubTools(server2, db2) {
       agent_id: agentIdSchema,
       title: external_exports.string().optional(),
       body: external_exports.string().optional(),
-      base: external_exports.string().optional()
+      base: external_exports.string().regex(/^[a-zA-Z0-9._\/-]+$/).max(200).optional()
     },
     async ({ team_id, agent_id, title, body, base }) => {
       try {
+        db2.getActiveTeam(team_id);
+        if (!db2.isMember(team_id, agent_id)) {
+          throw new Error(`Agent '${agent_id}' is not a member of team '${team_id}'`);
+        }
         const team = db2.getTeam(team_id);
-        if (!team) throw new Error(`Team '${team_id}' not found`);
         const prTitle = title || team.goal;
         let prBody = body;
         if (!prBody) {
@@ -32046,17 +32052,8 @@ function registerGithubTools(server2, db2) {
             `Created by copilot-agent-teams (team ${team_id})`
           ].join("\n");
         }
-        const baseFlag = base ? `--base ${base}` : "";
         try {
-          (0, import_child_process.execSync)("git add -A && git commit -m 'chore: teammate work product' --allow-empty", {
-            encoding: "utf-8",
-            timeout: 15e3,
-            stdio: "pipe"
-          });
-        } catch {
-        }
-        try {
-          (0, import_child_process.execSync)("git push -u origin HEAD", {
+          (0, import_child_process.execFileSync)("git", ["push", "-u", "origin", "HEAD"], {
             encoding: "utf-8",
             timeout: 3e4,
             stdio: "pipe"
@@ -32064,13 +32061,15 @@ function registerGithubTools(server2, db2) {
         } catch (pushErr) {
           throw new Error(`Failed to push branch: ${pushErr.message}`);
         }
-        const bodyFile = (0, import_path.join)((0, import_os.tmpdir)(), `pr-body-${Date.now()}.md`);
+        const bodyFile = (0, import_path.join)((0, import_os.tmpdir)(), `pr-body-${(0, import_crypto2.randomUUID)()}.md`);
         (0, import_fs.writeFileSync)(bodyFile, prBody);
         try {
-          const prOutput = (0, import_child_process.execSync)(
-            `gh pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}" ${baseFlag}`,
-            { encoding: "utf-8", timeout: 3e4 }
-          ).trim();
+          const args = ["pr", "create", "--title", prTitle, "--body-file", bodyFile];
+          if (base) args.push("--base", base);
+          const prOutput = (0, import_child_process.execFileSync)("gh", args, {
+            encoding: "utf-8",
+            timeout: 3e4
+          }).trim();
           return { content: [{ type: "text", text: JSON.stringify({ pr_url: prOutput }) }] };
         } finally {
           try {

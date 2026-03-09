@@ -54,6 +54,27 @@ describe("GitHub Tools", () => {
     expect(result.isError).toBe(true);
   });
 
+  it("create_pr rejects non-member", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    const result = await client.callTool({
+      name: "create_pr",
+      arguments: { team_id: team.id, agent_id: "unknown-agent" },
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it("create_pr rejects stopped team", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    db.updateTeamStatus(team.id, "stopped");
+    const result = await client.callTool({
+      name: "create_pr",
+      arguments: { team_id: team.id, agent_id: "lead" },
+    });
+    expect(result.isError).toBe(true);
+  });
+
   it("create_tasks_from_issues handles gh CLI errors gracefully", async () => {
     const team = db.createTeam("Test");
     db.addMember(team.id, "lead", "lead");
