@@ -16,6 +16,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
       try {
         db.getActiveTeam(team_id);
         const task = db.createTask(team_id, subject, description, assigned_to, blocked_by);
+        db.logAction(team_id, assigned_to ?? "lead", "task_create", task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -31,6 +32,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db.getActiveTeam(existingTask.team_id);
         const task = db.claimTask(task_id, agent_id);
+        db.logAction(existingTask.team_id, agent_id, "task_claim", task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -50,6 +52,8 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db.getActiveTeam(existingTask.team_id);
         const task = db.updateTask(task_id, status, result);
+        const actionType = status === "completed" ? "task_complete" : "task_block";
+        db.logAction(existingTask.team_id, existingTask.assigned_to ?? "lead", actionType, task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -65,6 +69,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db.getActiveTeam(existingTask.team_id);
         const task = db.reassignTask(task_id, agent_id);
+        db.logAction(existingTask.team_id, agent_id, "task_reassign", task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };

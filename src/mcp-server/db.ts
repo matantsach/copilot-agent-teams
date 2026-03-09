@@ -1,6 +1,6 @@
 import { Database } from "node-sqlite3-wasm";
 import { randomUUID } from "crypto";
-import type { Team, Task, Message, Member, TeamStatus, TaskStatus, MemberRole } from "./types.js";
+import type { Team, Task, Message, Member, AgentAction, TeamStatus, TaskStatus, MemberRole } from "./types.js";
 
 export class TeamDB {
   private db: Database;
@@ -32,6 +32,8 @@ export class TeamDB {
         assigned_to TEXT,
         blocked_by TEXT,
         result TEXT,
+        claimed_at INTEGER,
+        completed_at INTEGER,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
       );
@@ -49,10 +51,21 @@ export class TeamDB {
         agent_id TEXT NOT NULL,
         role TEXT DEFAULT 'teammate' CHECK(role IN ('lead','teammate')),
         status TEXT DEFAULT 'active' CHECK(status IN ('active','idle','finished')),
+        worktree_path TEXT,
         PRIMARY KEY (team_id, agent_id)
       );
       CREATE INDEX IF NOT EXISTS idx_tasks_team_status ON tasks(team_id, status);
       CREATE INDEX IF NOT EXISTS idx_messages_inbox ON messages(team_id, read, to_agent);
+      CREATE TABLE IF NOT EXISTS agent_actions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        team_id TEXT NOT NULL,
+        agent_id TEXT NOT NULL,
+        task_id INTEGER,
+        action_type TEXT NOT NULL,
+        detail TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_actions_team ON agent_actions(team_id, created_at);
     `);
   }
 
@@ -100,9 +113,12 @@ export class TeamDB {
 
   // --- Members ---
 
-  addMember(teamId: string, agentId: string, role: MemberRole): Member {
-    this.db.run("INSERT OR IGNORE INTO members (team_id, agent_id, role, status) VALUES (?, ?, ?, 'active')", [teamId, agentId, role]);
-    return { team_id: teamId, agent_id: agentId, role, status: "active" };
+  addMember(teamId: string, agentId: string, role: MemberRole, worktreePath?: string): Member {
+    this.db.run(
+      "INSERT OR IGNORE INTO members (team_id, agent_id, role, status, worktree_path) VALUES (?, ?, ?, 'active', ?)",
+      [teamId, agentId, role, worktreePath ?? null]
+    );
+    return { team_id: teamId, agent_id: agentId, role, status: "active", worktree_path: worktreePath ?? null };
   }
 
   isMember(teamId: string, agentId: string): boolean {
@@ -114,10 +130,24 @@ export class TeamDB {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as unknown as Member[];
   }
 
+  updateMemberWorktree(teamId: string, agentId: string, worktreePath: string): void {
+    const result = this.db.run(
+      "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",
+      [worktreePath, teamId, agentId]
+    );
+    if (result.changes === 0) throw new Error(`Member '${agentId}' not found in team '${teamId}'`);
+  }
+
+  getWorktrees(teamId: string): Array<{ agent_id: string; worktree_path: string }> {
+    return this.db.all(
+      "SELECT agent_id, worktree_path FROM members WHERE team_id = ? AND worktree_path IS NOT NULL",
+      [teamId]
+    ) as unknown as Array<{ agent_id: string; worktree_path: string }>;
+  }
+
   // --- Tasks ---
 
   createTask(teamId: string, subject: string, description?: string, assignedTo?: string, blockedBy?: number[]): Task {
-    // Validate blocker IDs
     if (blockedBy && blockedBy.length > 0) {
       for (const bid of blockedBy) {
         const blocker = this.getTask(bid);
@@ -142,16 +172,11 @@ export class TeamDB {
   }
 
   claimTask(id: number, agentId: string): Task {
-    // Wrap blocker checks + claim in a single IMMEDIATE transaction
-    // to prevent TOCTOU races between checking blockers and claiming
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const task = this.getTask(id);
       if (!task) throw new Error(`Task ${id} not found`);
 
-      // Safety net: verify blockers are complete before claiming.
-      // Auto-unblock in updateTask should have already set status to "pending",
-      // but this check provides a clear error message if a task is still blocked.
       if (task.blocked_by && task.blocked_by.length > 0) {
         for (const blockerId of task.blocked_by) {
           const blocker = this.getTask(blockerId);
@@ -161,15 +186,14 @@ export class TeamDB {
         }
       }
 
-      // Check pre-assignment
       if (task.assigned_to && task.assigned_to !== agentId) {
         throw new Error(`Task ${id} is assigned to ${task.assigned_to}, not ${agentId}`);
       }
 
-      // Atomic claim: single UPDATE with WHERE guard
+      const now = Date.now();
       const result = this.db.run(
-        "UPDATE tasks SET assigned_to = ?, status = 'in_progress', updated_at = ? WHERE id = ? AND status = 'pending' AND (assigned_to IS NULL OR assigned_to = ?)",
-        [agentId, Date.now(), id, agentId]
+        "UPDATE tasks SET assigned_to = ?, status = 'in_progress', claimed_at = ?, updated_at = ? WHERE id = ? AND status = 'pending' AND (assigned_to IS NULL OR assigned_to = ?)",
+        [agentId, now, now, id, agentId]
       );
 
       if (result.changes === 0) {
@@ -212,12 +236,10 @@ export class TeamDB {
   };
 
   updateTask(id: number, status: TaskStatus, result?: string): Task {
-    // Enforce result required on completion
     if (status === "completed" && !result) {
       throw new Error("result is required when completing a task");
     }
 
-    // Wrap status update + auto-unblock in a transaction
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const task = this.getTask(id);
@@ -238,7 +260,12 @@ export class TeamDB {
         throw new Error(`Invalid transition: ${task.status} → ${effectiveStatus}`);
       }
 
-      this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, Date.now(), id]);
+      const now = Date.now();
+      if (effectiveStatus === "completed") {
+        this.db.run("UPDATE tasks SET status = ?, result = ?, completed_at = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, now, id]);
+      } else {
+        this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
+      }
 
       // Auto-unblock: when a task completes, check if it unblocks others
       if (effectiveStatus === "completed") {
@@ -258,7 +285,6 @@ export class TeamDB {
     if (!task) throw new Error(`Task ${id} not found`);
     if (task.status !== "in_progress") throw new Error(`Task ${id} is not in_progress (status: ${task.status})`);
 
-    // Enforce lead-only: caller must be a lead in the task's team
     const members = this.getMembers(task.team_id);
     const caller = members.find(m => m.agent_id === callerAgentId);
     if (!caller || caller.role !== "lead") {
@@ -266,7 +292,7 @@ export class TeamDB {
     }
 
     this.db.run(
-      "UPDATE tasks SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
+      "UPDATE tasks SET status = 'pending', assigned_to = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?",
       [Date.now(), id]
     );
     return this.getTask(id)!;
@@ -286,7 +312,8 @@ export class TeamDB {
 
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      this.db.run("UPDATE tasks SET status = 'completed', updated_at = ? WHERE id = ?", [Date.now(), id]);
+      const now = Date.now();
+      this.db.run("UPDATE tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?", [now, now, id]);
 
       // Auto-unblock dependent tasks
       this.autoUnblockDependents(id, task.team_id);
@@ -357,14 +384,11 @@ export class TeamDB {
   sendMessage(teamId: string, from: string, to: string | null, content: string): Message {
     const now = Date.now();
 
-    // Validate sender is a member
     if (!this.isMember(teamId, from)) {
       throw new Error(`Agent '${from}' is not a member of team '${teamId}'`);
     }
 
     if (to === null) {
-      // Broadcast: expand to one row per recipient (excluding sender)
-      // Wrapped in transaction for atomic delivery
       this.db.exec("BEGIN IMMEDIATE");
       try {
         const members = this.getMembers(teamId);
@@ -389,7 +413,6 @@ export class TeamDB {
       }
     }
 
-    // Direct message: validate recipient exists
     if (!this.isMember(teamId, to)) {
       throw new Error(`Agent '${to}' is not a member of team '${teamId}'`);
     }
@@ -402,8 +425,6 @@ export class TeamDB {
   }
 
   getMessages(teamId: string, forAgent: string, since?: number): Message[] {
-    // Atomic read-and-mark-as-read
-    // node-sqlite3-wasm: use explicit BEGIN/COMMIT
     this.db.exec("BEGIN IMMEDIATE");
     try {
       let sql = "SELECT * FROM messages WHERE team_id = ? AND read = 0 AND to_agent = ?";
@@ -424,5 +445,63 @@ export class TeamDB {
       this.db.exec("ROLLBACK");
       throw e;
     }
+  }
+
+  // --- Audit Log ---
+
+  logAction(teamId: string, agentId: string, actionType: string, taskId?: number, detail?: string): void {
+    this.db.run(
+      "INSERT INTO agent_actions (team_id, agent_id, task_id, action_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [teamId, agentId, taskId ?? null, actionType, detail ?? null, Date.now()]
+    );
+  }
+
+  getAuditLog(teamId: string, filter?: { agent_id?: string; action_type?: string; limit?: number }): AgentAction[] {
+    let sql = "SELECT * FROM agent_actions WHERE team_id = ?";
+    const params: (string | number)[] = [teamId];
+
+    if (filter?.agent_id) { sql += " AND agent_id = ?"; params.push(filter.agent_id); }
+    if (filter?.action_type) { sql += " AND action_type = ?"; params.push(filter.action_type); }
+
+    sql += " ORDER BY created_at DESC LIMIT ?";
+    params.push(filter?.limit ?? 50);
+
+    return this.db.all(sql, params) as unknown as AgentAction[];
+  }
+
+  // --- Observability ---
+
+  getTasksWithDuration(teamId: string): Array<{ id: number; subject: string; status: string; assigned_to: string | null; claimed_at: number | null; completed_at: number | null; duration_ms: number | null }> {
+    const rows = this.db.all(
+      "SELECT id, subject, status, assigned_to, claimed_at, completed_at FROM tasks WHERE team_id = ? AND claimed_at IS NOT NULL",
+      [teamId]
+    ) as any[];
+
+    const now = Date.now();
+    return rows.map((row) => ({
+      id: row.id as number,
+      subject: row.subject as string,
+      status: row.status as string,
+      assigned_to: row.assigned_to as string | null,
+      claimed_at: row.claimed_at as number | null,
+      completed_at: row.completed_at as number | null,
+      duration_ms: row.completed_at ? (row.completed_at as number) - (row.claimed_at as number) : now - (row.claimed_at as number),
+    }));
+  }
+
+  getLastActivity(teamId: string): Record<string, { action_type: string; created_at: number }> {
+    const rows = this.db.all(
+      `SELECT agent_id, action_type, created_at FROM agent_actions
+       WHERE team_id = ? AND id IN (
+         SELECT MAX(id) FROM agent_actions WHERE team_id = ? GROUP BY agent_id
+       )`,
+      [teamId, teamId]
+    ) as any[];
+
+    const result: Record<string, { action_type: string; created_at: number }> = {};
+    for (const row of rows) {
+      result[row.agent_id as string] = { action_type: row.action_type as string, created_at: row.created_at as number };
+    }
+    return result;
   }
 }
