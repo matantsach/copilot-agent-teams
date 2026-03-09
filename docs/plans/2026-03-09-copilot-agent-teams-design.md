@@ -60,7 +60,7 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 | `create_task` | `team_id`, `subject`, `description?`, `assigned_to?`, `blocked_by?` | Add task. `blocked_by` is an array of task IDs (validated to exist in same team). Tasks with blockers auto-set to `blocked` status. |
 | `claim_task` | `task_id`, `agent_id` | Atomically claim a task. Enforces blocked_by. Respects pre-assignment — only the assigned agent or anyone if unassigned. |
 | `update_task` | `task_id`, `status`, `result?` | Mark in_progress/completed/blocked. `result` required when completing. Enforces valid state transitions only (see below). |
-| `reassign_task` | `task_id`, `reason?` | Lead-only. Resets an `in_progress` task back to `pending` with `assigned_to` cleared. For recovering stuck tasks. |
+| `reassign_task` | `task_id`, `agent_id`, `reason?` | Lead-only (enforced — checks caller's role in members table). Resets an `in_progress` task back to `pending` with `assigned_to` cleared. For recovering stuck tasks. |
 | `list_tasks` | `team_id`, `status?`, `assigned_to?`, `limit?`, `offset?` | Paginated task list, filterable by status/assignee. Default limit 20. |
 
 ### Messaging
@@ -82,7 +82,8 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 - **Task recovery** — `reassign_task` (lead-only) resets `in_progress→pending` with `assigned_to` cleared, allowing stuck tasks to be re-claimed by another agent.
 - **Idempotent registration** — `register_teammate` uses `INSERT OR IGNORE` so retries after transient failures don't throw.
 - **Broadcast atomicity** — broadcast expansion (inserting per-recipient rows) is wrapped in a transaction to prevent partial delivery on crash.
-- **Recipient validation** — `send_message` validates that the target agent is a registered member of the team.
+- **Sender and recipient validation** — `send_message` validates both `from` (sender) and `to` (recipient) are registered members of the team.
+- **Active team enforcement** — all mutating tools (`create_task`, `claim_task`, `update_task`, `reassign_task`, `send_message`, `broadcast`) verify the team is active. Read-only tools (`team_status`, `get_messages`, `list_tasks`) allow querying stopped teams.
 - **Blocker validation** — `create_task` validates that all `blocked_by` task IDs exist and belong to the same team.
 - **Team existence check** — all mutating tools verify the team exists and is active. Read-only tools (`team_status`, `get_messages`) allow querying stopped teams.
 - **Zod-typed schemas** — all tool inputs are validated via Zod (e.g., `blocked_by` is `z.array(z.number())`). No raw JSON.parse in tool handlers.

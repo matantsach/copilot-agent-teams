@@ -25,7 +25,7 @@
   "name": "copilot-agent-teams",
   "version": "0.1.0",
   "description": "Multi-agent team coordination plugin for GitHub Copilot CLI",
-  "type": "module",
+  "type": "commonjs",
   "main": "dist/mcp-server/index.js",
   "scripts": {
     "build": "node esbuild.config.mjs",
@@ -295,7 +295,7 @@ export class TeamDB {
   getTask(id: number): Task | undefined { throw new Error("Not implemented"); }
   claimTask(id: number, agentId: string): Task { throw new Error("Not implemented"); }
   updateTask(id: number, status: TaskStatus, result?: string): Task { throw new Error("Not implemented"); }
-  reassignTask(id: number): Task { throw new Error("Not implemented"); }
+  reassignTask(id: number, callerAgentId: string): Task { throw new Error("Not implemented"); }
   countTasks(teamId: string): Record<TaskStatus | "total", number> { throw new Error("Not implemented"); }
   listTasks(teamId: string, filter?: { status?: TaskStatus; assigned_to?: string; limit?: number; offset?: number }): Task[] { throw new Error("Not implemented"); }
   sendMessage(teamId: string, from: string, to: string | null, content: string): Message { throw new Error("Not implemented"); }
@@ -465,11 +465,12 @@ describe("TeamDB", () => {
       expect(() => db.updateTask(task.id, "pending")).toThrow("Invalid transition");
     });
 
-    it("reassignTask resets in_progress to pending", () => {
+    it("reassignTask resets in_progress to pending (lead-only)", () => {
       const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
       const task = db.createTask(team.id, "Do thing");
       db.claimTask(task.id, "teammate-1");
-      const reset = db.reassignTask(task.id);
+      const reset = db.reassignTask(task.id, "lead");
       expect(reset.status).toBe("pending");
       expect(reset.assigned_to).toBeNull();
       // Another agent can now claim it
@@ -477,10 +478,20 @@ describe("TeamDB", () => {
       expect(claimed.assigned_to).toBe("teammate-2");
     });
 
+    it("reassignTask rejects non-lead callers", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      expect(() => db.reassignTask(task.id, "teammate-1")).toThrow("Only the team lead");
+    });
+
     it("reassignTask rejects non-in_progress tasks", () => {
       const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
       const task = db.createTask(team.id, "Do thing");
-      expect(() => db.reassignTask(task.id)).toThrow("not in_progress");
+      expect(() => db.reassignTask(task.id, "lead")).toThrow("not in_progress");
     });
 
     it("countTasks returns counts by status", () => {
@@ -831,10 +842,17 @@ export class TeamDB {
     }
   }
 
-  reassignTask(id: number): Task {
+  reassignTask(id: number, callerAgentId: string): Task {
     const task = this.getTask(id);
     if (!task) throw new Error(`Task ${id} not found`);
     if (task.status !== "in_progress") throw new Error(`Task ${id} is not in_progress (status: ${task.status})`);
+
+    // Enforce lead-only: caller must be a lead in the task's team
+    const members = this.getMembers(task.team_id);
+    const caller = members.find(m => m.agent_id === callerAgentId);
+    if (!caller || caller.role !== "lead") {
+      throw new Error(`Only the team lead can reassign tasks`);
+    }
 
     this.db.run(
       "UPDATE tasks SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
@@ -874,6 +892,11 @@ export class TeamDB {
 
   sendMessage(teamId: string, from: string, to: string | null, content: string): Message {
     const now = Date.now();
+
+    // Validate sender is a member
+    if (!this.isMember(teamId, from)) {
+      throw new Error(`Agent '${from}' is not a member of team '${teamId}'`);
+    }
 
     if (to === null) {
       // Broadcast: expand to one row per recipient (excluding sender)
@@ -1158,7 +1181,9 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
         if (team.status === "stopped") throw new Error(`Team '${team_id}' is already stopped`);
         db.updateTeamStatus(team_id, "stopped");
         const completedTasks = db.listTasks(team_id, { status: "completed", limit: 100 });
-        return { content: [{ type: "text", text: JSON.stringify({ team_id, reason, completed_tasks: completedTasks }) }] };
+        const taskCounts = db.countTasks(team_id);
+        const incomplete = taskCounts.pending + taskCounts.in_progress + taskCounts.blocked;
+        return { content: [{ type: "text", text: JSON.stringify({ team_id, reason, completed_tasks: completedTasks, task_counts: taskCounts, incomplete_count: incomplete }) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
       }
@@ -1268,15 +1293,25 @@ describe("Task Board Tools", () => {
     expect(result.isError).toBe(true);
   });
 
-  it("reassign_task resets stuck task", async () => {
+  it("reassign_task resets stuck task (lead-only)", async () => {
     const team = db.createTeam("Test");
     db.addMember(team.id, "lead", "lead");
     const task = db.createTask(team.id, "Do thing");
     db.claimTask(task.id, "teammate-1");
-    const result = await client.callTool({ name: "reassign_task", arguments: { task_id: task.id } });
+    const result = await client.callTool({ name: "reassign_task", arguments: { task_id: task.id, agent_id: "lead" } });
     const content = JSON.parse((result.content as any)[0].text);
     expect(content.status).toBe("pending");
     expect(content.assigned_to).toBeNull();
+  });
+
+  it("reassign_task rejects non-lead callers", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    const result = await client.callTool({ name: "reassign_task", arguments: { task_id: task.id, agent_id: "teammate-1" } });
+    expect(result.isError).toBe(true);
   });
 
   it("list_tasks with pagination", async () => {
@@ -1320,6 +1355,10 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
     { task_id: z.number(), agent_id: z.string().regex(/^[a-z0-9-]+$/).max(50) },
     async ({ task_id, agent_id }) => {
       try {
+        // Verify team is active before claiming
+        const existingTask = db.getTask(task_id);
+        if (!existingTask) throw new Error(`Task ${task_id} not found`);
+        db.getActiveTeam(existingTask.team_id);
         const task = db.claimTask(task_id, agent_id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
@@ -1336,6 +1375,10 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
     },
     async ({ task_id, status, result }) => {
       try {
+        // Verify team is active before updating
+        const existingTask = db.getTask(task_id);
+        if (!existingTask) throw new Error(`Task ${task_id} not found`);
+        db.getActiveTeam(existingTask.team_id);
         const task = db.updateTask(task_id, status, result);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
@@ -1344,11 +1387,11 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
     }
   );
 
-  server.tool("reassign_task", "Reset a stuck in_progress task back to pending (lead-only)",
-    { task_id: z.number(), reason: z.string().optional() },
-    async ({ task_id }) => {
+  server.tool("reassign_task", "Reset a stuck in_progress task back to pending (lead-only, enforced)",
+    { task_id: z.number(), agent_id: z.string().regex(/^[a-z0-9-]+$/).max(50), reason: z.string().optional() },
+    async ({ task_id, agent_id }) => {
       try {
-        const task = db.reassignTask(task_id);
+        const task = db.reassignTask(task_id, agent_id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -1791,15 +1834,20 @@ git commit -m "feat: add conditional hooks — silent when no active teams"
 
 **Step 1: Write hook tests**
 
-These tests verify the hooks work correctly by spawning them as child processes and checking their stdout output.
+These tests verify the hooks work correctly by spawning them as child processes and checking their stdout output. Uses `resolve` to construct absolute paths to the source files while setting `cwd` to the temp directory so the hooks' relative `.copilot-teams/teams.db` path resolves correctly.
 
 ```typescript
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { execSync } from "child_process";
 import { mkdtempSync, rmSync, mkdirSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 import { tmpdir } from "os";
 import { TeamDB } from "../mcp-server/db.js";
+
+// Absolute paths to hook source files (resolved from project root)
+const projectRoot = resolve(__dirname, "../..");
+const checkActiveTeamsScript = join(projectRoot, "src/hooks/check-active-teams.ts");
+const nudgeMessagesScript = join(projectRoot, "src/hooks/nudge-messages.ts");
 
 describe("Hooks", () => {
   let tmpDir: string;
@@ -1814,7 +1862,7 @@ describe("Hooks", () => {
 
   describe("check-active-teams", () => {
     it("outputs nothing when no DB exists", () => {
-      const output = execSync("npx tsx src/hooks/check-active-teams.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${checkActiveTeamsScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toBe("");
     });
 
@@ -1825,7 +1873,7 @@ describe("Hooks", () => {
       const team = db.createTeam("Test");
       db.updateTeamStatus(team.id, "stopped");
       db.close();
-      const output = execSync("npx tsx src/hooks/check-active-teams.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${checkActiveTeamsScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toBe("");
     });
 
@@ -1835,7 +1883,7 @@ describe("Hooks", () => {
       const db = new TeamDB(join(dbDir, "teams.db"));
       db.createTeam("Build auth system");
       db.close();
-      const output = execSync("npx tsx src/hooks/check-active-teams.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${checkActiveTeamsScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toContain("Active agent teams found");
       expect(output).toContain("Build auth system");
     });
@@ -1843,7 +1891,7 @@ describe("Hooks", () => {
 
   describe("nudge-messages", () => {
     it("outputs nothing when no DB exists", () => {
-      const output = execSync("npx tsx src/hooks/nudge-messages.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toBe("");
     });
 
@@ -1854,7 +1902,7 @@ describe("Hooks", () => {
       const team = db.createTeam("Test");
       db.updateTeamStatus(team.id, "stopped");
       db.close();
-      const output = execSync("npx tsx src/hooks/nudge-messages.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toBe("");
     });
 
@@ -1864,7 +1912,7 @@ describe("Hooks", () => {
       const db = new TeamDB(join(dbDir, "teams.db"));
       db.createTeam("Test");
       db.close();
-      const output = execSync("npx tsx src/hooks/nudge-messages.ts", { cwd: tmpDir, encoding: "utf8" });
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
       expect(output).toContain("get_messages");
     });
   });
