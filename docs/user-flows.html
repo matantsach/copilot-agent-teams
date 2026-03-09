@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>copilot-agent-teams | User Flow</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --surface: #111115;
+    --surface-2: #18181d;
+    --border: #252530;
+    --border-glow: #2a2a3a;
+    --text: #e8e8ed;
+    --text-dim: #6e6e80;
+    --text-muted: #44445a;
+    --accent: #00d4aa;
+    --accent-dim: #00d4aa22;
+    --accent-glow: #00d4aa15;
+    --orange: #ff8c42;
+    --orange-dim: #ff8c4222;
+    --blue: #5b8cff;
+    --blue-dim: #5b8cff22;
+    --purple: #a78bfa;
+    --purple-dim: #a78bfa22;
+    --red: #ff6b6b;
+    --red-dim: #ff6b6b22;
+    --yellow: #ffd93d;
+    --yellow-dim: #ffd93d22;
+    --pink: #f472b6;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    overflow-x: hidden;
+    line-height: 1.6;
+  }
+
+  /* Noise overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  /* Hero */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    padding: 2rem;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -20%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 800px;
+    height: 800px;
+    background: radial-gradient(circle, var(--accent-dim) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    padding: 0.4rem 1.2rem;
+    border-radius: 100px;
+    margin-bottom: 2rem;
+    opacity: 0;
+    animation: fadeUp 0.6s ease forwards 0.2s;
+    background: var(--accent-glow);
+  }
+
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 5rem);
+    font-weight: 700;
+    text-align: center;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 0.4s;
+  }
+
+  .hero h1 span {
+    background: linear-gradient(135deg, var(--accent), var(--blue));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .hero-sub {
+    margin-top: 1.5rem;
+    font-size: 1.1rem;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 600px;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 0.6s;
+  }
+
+  .hero-repos {
+    display: flex;
+    gap: 1rem;
+    margin-top: 3rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 0.8s;
+  }
+
+  .repo-chip {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .repo-chip .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .scroll-hint {
+    position: absolute;
+    bottom: 2rem;
+    opacity: 0;
+    animation: fadeUp 0.8s ease forwards 1.2s;
+  }
+
+  .scroll-hint svg {
+    width: 24px;
+    height: 24px;
+    color: var(--text-muted);
+    animation: bounce 2s ease infinite;
+  }
+
+  /* Timeline */
+  .timeline {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 0 2rem 6rem;
+    position: relative;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 2rem;
+    top: 0;
+    bottom: 0;
+    width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--border) 5%, var(--border) 95%, transparent);
+  }
+
+  @media (min-width: 768px) {
+    .timeline::before { left: 50%; }
+  }
+
+  .step {
+    position: relative;
+    margin-bottom: 6rem;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: all 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .step.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .step-marker {
+    position: absolute;
+    left: 2rem;
+    transform: translateX(-50%);
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    z-index: 2;
+    border: 2px solid;
+  }
+
+  @media (min-width: 768px) {
+    .step-marker { left: 50%; }
+  }
+
+  .step-content {
+    margin-left: 4.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @media (min-width: 768px) {
+    .step-content {
+      margin-left: 0;
+      width: 45%;
+    }
+    .step:nth-child(odd) .step-content { margin-left: auto; margin-right: 0; }
+    .step:nth-child(even) .step-content { margin-left: 0; }
+  }
+
+  .step-content::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    opacity: 0.03;
+    pointer-events: none;
+  }
+
+  .step-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.1em;
+    margin-bottom: 0.5rem;
+  }
+
+  .step-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .step-desc {
+    color: var(--text-dim);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    line-height: 1.7;
+  }
+
+  /* Terminal */
+  .terminal {
+    background: #0c0c10;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    line-height: 1.8;
+  }
+
+  .terminal-bar {
+    background: var(--surface-2);
+    padding: 0.5rem 1rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .terminal-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+  }
+
+  .terminal-body {
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+  }
+
+  .terminal-body .prompt { color: var(--accent); }
+  .terminal-body .cmd { color: var(--text); }
+  .terminal-body .output { color: var(--text-dim); }
+  .terminal-body .hl-green { color: var(--accent); }
+  .terminal-body .hl-orange { color: var(--orange); }
+  .terminal-body .hl-blue { color: var(--blue); }
+  .terminal-body .hl-purple { color: var(--purple); }
+  .terminal-body .hl-red { color: var(--red); }
+  .terminal-body .hl-yellow { color: var(--yellow); }
+  .terminal-body .hl-dim { color: var(--text-muted); }
+
+  /* Sequence diagram */
+  .sequence {
+    margin-top: 1.5rem;
+  }
+
+  .seq-actors {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+
+  .seq-actors::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .seq-actor {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    letter-spacing: 0.05em;
+    text-align: center;
+    padding-bottom: 0.75rem;
+    color: var(--text-dim);
+    flex: 1;
+  }
+
+  .seq-row {
+    display: flex;
+    align-items: center;
+    padding: 0.4rem 0;
+    position: relative;
+  }
+
+  .seq-msg {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    white-space: nowrap;
+  }
+
+  .seq-arrow {
+    height: 1px;
+    flex: 1;
+    position: relative;
+  }
+
+  /* Task board */
+  .task-board {
+    margin-top: 1rem;
+  }
+
+  .task-row {
+    display: grid;
+    grid-template-columns: 2rem 1fr auto auto;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.8rem;
+    align-items: center;
+  }
+
+  .task-row:last-child { border-bottom: none; }
+
+  .task-row.header {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    color: var(--text-muted);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .task-id {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+  }
+
+  .task-subject {
+    color: var(--text);
+  }
+
+  .task-agent {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+  }
+
+  .status-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    padding: 0.15rem 0.6rem;
+    border-radius: 100px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+
+  .status-pending { color: var(--yellow); border-color: var(--yellow-dim); background: var(--yellow-dim); }
+  .status-progress { color: var(--blue); border-color: var(--blue-dim); background: var(--blue-dim); }
+  .status-review { color: var(--orange); border-color: var(--orange-dim); background: var(--orange-dim); }
+  .status-completed { color: var(--accent); border-color: var(--accent-dim); background: var(--accent-dim); }
+  .status-blocked { color: var(--red); border-color: var(--red-dim); background: var(--red-dim); }
+
+  /* Tmux visual */
+  .tmux-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px;
+    background: var(--accent);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 1rem;
+    border: 1px solid var(--accent);
+  }
+
+  .tmux-pane {
+    background: #0c0c10;
+    padding: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.65rem;
+    line-height: 1.6;
+    min-height: 100px;
+  }
+
+  .tmux-pane-title {
+    color: var(--text-muted);
+    margin-bottom: 0.5rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* Flow arrows */
+  .flow-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.75rem 0;
+  }
+
+  .flow-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    margin-top: 0.1rem;
+  }
+
+  .flow-text {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  .flow-text strong {
+    color: var(--text);
+    font-weight: 500;
+  }
+
+  .flow-text code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    background: var(--surface-2);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    color: var(--accent);
+  }
+
+  /* Review decision */
+  .decision-split {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  .decision-option {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1rem;
+    position: relative;
+  }
+
+  .decision-option h4 {
+    font-size: 0.85rem;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .decision-option p {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+  }
+
+  /* Final summary */
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+  }
+
+  .summary-stat {
+    text-align: center;
+    padding: 1.2rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--surface-2);
+  }
+
+  .summary-stat .val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .summary-stat .label {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-top: 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* Section title */
+  .section-title {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 6rem 2rem 3rem;
+    text-align: center;
+    position: relative;
+  }
+
+  .section-title h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .section-title p {
+    color: var(--text-dim);
+    margin-top: 0.5rem;
+    font-size: 0.95rem;
+  }
+
+  /* Animations */
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(6px); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Path selector */
+  .path-tabs {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .path-tab {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.6rem 1.5rem;
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    letter-spacing: 0.02em;
+  }
+
+  .path-tab:hover { color: var(--text); background: var(--surface-2); }
+
+  .path-tab.active {
+    background: var(--accent-dim);
+    color: var(--accent);
+    border-color: var(--accent);
+  }
+
+  .path-plan, .path-issues { transition: opacity 0.3s ease, max-height 0.4s ease; overflow: hidden; }
+  .path-hidden { opacity: 0; max-height: 0; pointer-events: none; margin: 0 !important; padding: 0 !important; }
+  .path-visible { opacity: 1; max-height: 2000px; }
+
+  .typing-cursor::after {
+    content: '|';
+    animation: pulse 1s step-end infinite;
+    color: var(--accent);
+  }
+
+  /* Scenario banner */
+  .scenario-banner {
+    max-width: 900px;
+    margin: 0 auto 2rem;
+    padding: 0 2rem;
+  }
+
+  .scenario-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .scenario-card h3 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .scenario-repos {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .scenario-repo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0.8rem;
+    background: var(--surface-2);
+    border-radius: 8px;
+    font-size: 0.8rem;
+  }
+
+  .scenario-repo .name {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 500;
+    min-width: 130px;
+  }
+
+  .scenario-repo .desc {
+    color: var(--text-dim);
+    font-size: 0.75rem;
+  }
+
+  .scenario-repo .issue {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    margin-left: auto;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-badge">copilot-agent-teams plugin</div>
+  <h1>Multi-Agent<br><span>User Flow</span></h1>
+  <p class="hero-sub">How a user implements a high-level design spanning 3 repositories using parallel agent teams</p>
+
+  <!-- Path selector -->
+  <div class="path-selector" style="margin-top: 2.5rem; opacity: 0; animation: fadeUp 0.8s ease forwards 0.7s;">
+    <div class="path-tabs">
+      <button class="path-tab active" onclick="switchPath('plan')">From a Plan File</button>
+      <button class="path-tab" onclick="switchPath('issues')">From GitHub Issues</button>
+    </div>
+  </div>
+
+  <div class="hero-repos" id="hero-repos-plan">
+    <div class="repo-chip"><div class="dot" style="background: var(--accent)"></div>docs/plans/payment-processing.md</div>
+  </div>
+  <div class="hero-repos" id="hero-repos-issues" style="display: none;">
+    <div class="repo-chip"><div class="dot" style="background: var(--orange)"></div>api-gateway #12</div>
+    <div class="repo-chip"><div class="dot" style="background: var(--blue)"></div>billing-service #8</div>
+    <div class="repo-chip"><div class="dot" style="background: var(--purple)"></div>user-dashboard #15</div>
+  </div>
+  <div class="scroll-hint">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 13l5 5 5-5M7 6l5 5 5-5"/></svg>
+  </div>
+</section>
+
+<!-- Scenario: Plan path -->
+<div class="scenario-banner path-plan path-visible" id="scenario-plan">
+  <div class="scenario-card">
+    <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg> Scenario: You brainstormed and have a plan</h3>
+    <div class="scenario-repos">
+      <div class="scenario-repo">
+        <div class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+        <span class="name" style="min-width: auto;">docs/plans/payment-processing-design.md</span>
+      </div>
+    </div>
+    <div style="margin-top: 0.75rem; padding: 0.8rem; background: var(--surface-2); border-radius: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; line-height: 1.8; color: var(--text-dim);">
+      <div style="color: var(--text-muted);"># Payment Processing — Implementation Plan</div>
+      <div style="margin-top: 0.3rem;"><span style="color: var(--orange)">Step 1:</span> api-gateway — Add /payments route, auth middleware</div>
+      <div><span style="color: var(--blue)">Step 2:</span> billing-service — Stripe integration, webhooks</div>
+      <div><span style="color: var(--purple)">Step 3:</span> user-dashboard — Billing page, payment form</div>
+      <div><span style="color: var(--yellow)">Step 4:</span> Integration tests (depends on 1-3)</div>
+    </div>
+  </div>
+</div>
+
+<!-- Scenario: Issues path -->
+<div class="scenario-banner path-issues path-hidden" id="scenario-issues">
+  <div class="scenario-card">
+    <h3><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg> Scenario: Work tracked in GitHub Issues</h3>
+    <div class="scenario-repos">
+      <div class="scenario-repo">
+        <div class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--orange);flex-shrink:0"></div>
+        <span class="name">api-gateway</span>
+        <span class="desc">Payment routing, auth middleware, rate limiting</span>
+        <span class="issue">#12</span>
+      </div>
+      <div class="scenario-repo">
+        <div class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>
+        <span class="name">billing-service</span>
+        <span class="desc">Stripe integration, webhooks, invoice model</span>
+        <span class="issue">#8</span>
+      </div>
+      <div class="scenario-repo">
+        <div class="dot" style="width:8px;height:8px;border-radius:50%;background:var(--purple);flex-shrink:0"></div>
+        <span class="name">user-dashboard</span>
+        <span class="desc">Billing page, payment form, invoice history</span>
+        <span class="issue">#15</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TIMELINE -->
+<div class="section-title">
+  <h2>The Flow</h2>
+  <p>From goal to pull requests in ~20 minutes</p>
+</div>
+
+<div class="timeline">
+
+  <!-- Step 1: Start Team -->
+  <div class="step" data-step="1">
+    <div class="step-marker" style="background: var(--accent-dim); border-color: var(--accent); color: var(--accent);">1</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:00</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Start a Team
+      </div>
+      <div class="step-desc">You invoke the <code>/team-start</code> skill with your HLD goal. The plugin creates a team and spawns the team-lead agent.</div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="prompt">$</span> <span class="cmd">/team-start</span></div>
+          <div class="output" style="margin-top:0.3rem">Goal: Implement payment processing per</div>
+          <div class="output path-plan path-visible">      docs/plans/payment-processing-design.md</div>
+          <div class="output path-issues path-hidden">      api-gateway#12, billing-service#8, user-dashboard#15</div>
+          <div style="margin-top:0.5rem"><span class="hl-green">&#10003;</span> <span class="output">Team created:</span> <span class="hl-green">a1b2c3d4e5f67890</span></div>
+          <div><span class="hl-green">&#10003;</span> <span class="output">Handing off to</span> <span class="hl-blue">team-lead</span> <span class="output">agent...</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Decompose (Plan path) -->
+  <div class="step path-plan path-visible" data-step="2">
+    <div class="step-marker" style="background: var(--orange-dim); border-color: var(--orange); color: var(--orange);">2</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:01</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Lead Reads the Plan & Creates Tasks
+      </div>
+      <div class="step-desc">The team-lead agent reads your plan file, understands the architecture, then creates tasks directly on the board using <code>create_task</code>. No GitHub needed.</div>
+
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--orange-dim); color: var(--orange);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="flow-text">
+          Lead reads <code>docs/plans/payment-processing-design.md</code> and the codebase
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--accent-dim); color: var(--accent);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        </div>
+        <div class="flow-text">
+          Creates one <code>create_task</code> per plan step, with detailed descriptions from the plan
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--blue-dim); color: var(--blue);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+        </div>
+        <div class="flow-text">
+          Sets <code>blocked_by</code> for tasks with dependencies (e.g., integration tests blocked by all 3)
+        </div>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="hl-dim"># Lead reads your plan file, then:</span></div>
+          <div style="margin-top:0.3rem"><span class="hl-green">&#10003;</span> <span class="output">create_task</span> <span class="hl-orange">"Add /payments route, auth middleware, rate limiting"</span></div>
+          <div><span class="hl-dim">&nbsp; description from plan step 1 &middot; file paths &middot; expected outcomes</span></div>
+          <div style="margin-top:0.2rem"><span class="hl-green">&#10003;</span> <span class="output">create_task</span> <span class="hl-blue">"Stripe integration, webhook handler, invoice model"</span></div>
+          <div><span class="hl-dim">&nbsp; description from plan step 2</span></div>
+          <div style="margin-top:0.2rem"><span class="hl-green">&#10003;</span> <span class="output">create_task</span> <span class="hl-purple">"Billing page, payment form, invoice history"</span></div>
+          <div><span class="hl-dim">&nbsp; description from plan step 3</span></div>
+          <div style="margin-top:0.2rem"><span class="hl-green">&#10003;</span> <span class="output">create_task</span> <span class="hl-yellow">"Integration tests"</span> <span class="hl-dim">blocked_by: [1, 2, 3]</span></div>
+        </div>
+      </div>
+
+      <div class="task-board" style="margin-top: 1rem;">
+        <div class="task-row header">
+          <span>ID</span>
+          <span>Subject</span>
+          <span>Status</span>
+          <span>Agent</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#1</span>
+          <span class="task-subject">Payment routing & middleware</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#2</span>
+          <span class="task-subject">Stripe billing integration</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#3</span>
+          <span class="task-subject">Billing dashboard UI</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#4</span>
+          <span class="task-subject">Integration tests</span>
+          <span class="status-badge status-blocked">blocked</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Decompose (Issues path) -->
+  <div class="step path-issues path-hidden" data-step="2">
+    <div class="step-marker" style="background: var(--orange-dim); border-color: var(--orange); color: var(--orange);">2</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:01</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Lead Ingests GitHub Issues
+      </div>
+      <div class="step-desc">The team-lead agent reads the codebase, then pulls GitHub issues into the task board using <code>create_tasks_from_issues</code>. It adds a blocked integration task.</div>
+
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--orange-dim); color: var(--orange);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        </div>
+        <div class="flow-text">
+          Lead calls <code>create_tasks_from_issues</code> for each repo, pulling issue title + body into tasks
+        </div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--blue-dim); color: var(--blue);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+        </div>
+        <div class="flow-text">
+          Creates <code>create_task("Integration tests", blocked_by: [1,2,3])</code> &mdash; auto-blocked until all 3 are done
+        </div>
+      </div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="hl-dim"># Lead fetches issues via gh CLI:</span></div>
+          <div style="margin-top:0.3rem"><span class="hl-green">&#10003;</span> <span class="output">create_tasks_from_issues</span> <span class="hl-dim">repo:</span> <span class="hl-orange">you/api-gateway</span> <span class="hl-dim">issues:</span> <span class="output">[12]</span></div>
+          <div><span class="hl-green">&#10003;</span> <span class="output">create_tasks_from_issues</span> <span class="hl-dim">repo:</span> <span class="hl-blue">you/billing-service</span> <span class="hl-dim">issues:</span> <span class="output">[8]</span></div>
+          <div><span class="hl-green">&#10003;</span> <span class="output">create_tasks_from_issues</span> <span class="hl-dim">repo:</span> <span class="hl-purple">you/user-dashboard</span> <span class="hl-dim">issues:</span> <span class="output">[15]</span></div>
+          <div style="margin-top:0.2rem"><span class="hl-green">&#10003;</span> <span class="output">create_task</span> <span class="hl-yellow">"Integration tests"</span> <span class="hl-dim">blocked_by: [1, 2, 3]</span></div>
+        </div>
+      </div>
+
+      <div class="task-board" style="margin-top: 1rem;">
+        <div class="task-row header">
+          <span>ID</span>
+          <span>Subject</span>
+          <span>Status</span>
+          <span>Agent</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#1</span>
+          <span class="task-subject">Payment routing & middleware</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#2</span>
+          <span class="task-subject">Stripe billing integration</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#3</span>
+          <span class="task-subject">Billing dashboard UI</span>
+          <span class="status-badge status-pending">pending</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+        <div class="task-row">
+          <span class="task-id">#4</span>
+          <span class="task-subject">Integration tests</span>
+          <span class="status-badge status-blocked">blocked</span>
+          <span class="task-agent">&mdash;</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Spawn Teammates -->
+  <div class="step" data-step="3">
+    <div class="step-marker" style="background: var(--blue-dim); border-color: var(--blue); color: var(--blue);">3</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:02</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--blue)" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+        Spawn Teammates in Worktrees
+      </div>
+      <div class="step-desc">Each teammate gets an <strong>isolated git worktree</strong> and its own tmux pane. No file conflicts, ever.</div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="hl-dim"># Lead runs for each teammate:</span></div>
+          <div><span class="prompt">$</span> <span class="cmd">bash scripts/spawn-teammate.sh a1b2c3 teammate-1 "Payment routing"</span></div>
+          <div class="output" style="margin-top:0.2rem">WORKTREE_PATH=.copilot-teams/worktrees/a1b2c3/teammate-1</div>
+          <div class="output">Spawned <span class="hl-orange">teammate-1</span> in tmux pane</div>
+          <div class="output">(model: claude-sonnet-4-6, branch: <span class="hl-blue">team/a1b2c3/teammate-1</span>)</div>
+        </div>
+      </div>
+
+      <div class="tmux-grid">
+        <div class="tmux-pane">
+          <div class="tmux-pane-title" style="color: var(--accent);">team-lead</div>
+          <div style="color: var(--text-dim)">Monitoring progress...</div>
+          <div style="color: var(--text-dim)">Checking team_status</div>
+          <div style="color: var(--text-muted); margin-top: 0.5rem">main</div>
+        </div>
+        <div class="tmux-pane">
+          <div class="tmux-pane-title" style="color: var(--orange);">teammate-1</div>
+          <div style="color: var(--text-dim)">Working on task #1</div>
+          <div style="color: var(--text-dim)">Payment routing...</div>
+          <div style="color: var(--text-muted); margin-top: 0.5rem">team/a1b2c3/teammate-1</div>
+        </div>
+        <div class="tmux-pane">
+          <div class="tmux-pane-title" style="color: var(--blue);">teammate-2</div>
+          <div style="color: var(--text-dim)">Working on task #2</div>
+          <div style="color: var(--text-dim)">Stripe integration...</div>
+          <div style="color: var(--text-muted); margin-top: 0.5rem">team/a1b2c3/teammate-2</div>
+        </div>
+        <div class="tmux-pane">
+          <div class="tmux-pane-title" style="color: var(--purple);">teammate-3</div>
+          <div style="color: var(--text-dim)">Working on task #3</div>
+          <div style="color: var(--text-dim)">Billing dashboard...</div>
+          <div style="color: var(--text-muted); margin-top: 0.5rem">team/a1b2c3/teammate-3</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Parallel Work -->
+  <div class="step" data-step="4">
+    <div class="step-marker" style="background: var(--purple-dim); border-color: var(--purple); color: var(--purple);">4</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:02 &ndash; 0:12</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--purple)" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Teammates Work in Parallel
+      </div>
+      <div class="step-desc">Each teammate registers, claims a task, does the work, and submits. The <code>claimed_at</code> timestamp tracks duration.</div>
+
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--accent-dim); color: var(--accent);">1</div>
+        <div class="flow-text"><code>register_teammate</code> &mdash; join the team</div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--accent-dim); color: var(--accent);">2</div>
+        <div class="flow-text"><code>list_tasks</code> &rarr; <code>claim_task</code> &mdash; atomically claim work</div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--accent-dim); color: var(--accent);">3</div>
+        <div class="flow-text"><strong>Edit files, run tests</strong> in isolated worktree</div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--accent-dim); color: var(--accent);">4</div>
+        <div class="flow-text"><code>update_task(status: "completed", result: "...")</code></div>
+      </div>
+      <div class="flow-item">
+        <div class="flow-icon" style="background: var(--orange-dim); color: var(--orange);">!</div>
+        <div class="flow-text">Server routes to <code>needs_review</code> because team has <code>review_required: true</code></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5: Check Status -->
+  <div class="step" data-step="5">
+    <div class="step-marker" style="background: var(--yellow-dim); border-color: var(--yellow); color: var(--yellow);">5</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:11</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        You Check Progress
+      </div>
+      <div class="step-desc">At any point, <code>/team-status</code> shows a live dashboard with per-task duration and agent activity.</div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="prompt">$</span> <span class="cmd">/team-status</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Team</span> <span class="hl-green">a1b2c3d4</span> <span class="hl-dim">&middot;</span> <span class="output">Implement payment processing HLD</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Members:</span></div>
+          <div>&nbsp; <span class="hl-green">lead</span>        <span class="hl-dim">last activity:</span> <span class="output">2m ago</span> <span class="hl-dim">(task_create)</span></div>
+          <div>&nbsp; <span class="hl-orange">teammate-1</span>  <span class="hl-dim">last activity:</span> <span class="output">30s ago</span> <span class="hl-dim">(task_complete)</span></div>
+          <div>&nbsp; <span class="hl-blue">teammate-2</span>  <span class="hl-dim">last activity:</span> <span class="output">1m ago</span> <span class="hl-dim">(task_claim)</span></div>
+          <div>&nbsp; <span class="hl-purple">teammate-3</span>  <span class="hl-dim">last activity:</span> <span class="output">45s ago</span> <span class="hl-dim">(task_claim)</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Tasks:</span> <span class="hl-yellow">0 pending</span> <span class="hl-dim">&middot;</span> <span class="hl-blue">2 in_progress</span> <span class="hl-dim">&middot;</span> <span class="hl-orange">1 needs_review</span> <span class="hl-dim">&middot;</span> <span class="hl-red">1 blocked</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Task Details:</span></div>
+          <div>&nbsp; <span class="hl-dim">#1</span> Payment routing <span class="hl-orange">needs_review</span> <span class="hl-dim">duration:</span> <span class="output">8m 32s</span></div>
+          <div>&nbsp; <span class="hl-dim">#2</span> Stripe billing  <span class="hl-blue">in_progress</span>  <span class="hl-dim">running:</span>  <span class="output">6m 15s</span></div>
+          <div>&nbsp; <span class="hl-dim">#3</span> Dashboard UI    <span class="hl-blue">in_progress</span>  <span class="hl-dim">running:</span>  <span class="output">5m 48s</span></div>
+          <div>&nbsp; <span class="hl-dim">#4</span> Integration     <span class="hl-red">blocked</span>      <span class="hl-dim">by [1,2,3]</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6: Review -->
+  <div class="step" data-step="6">
+    <div class="step-marker" style="background: var(--orange-dim); border-color: var(--orange); color: var(--orange);">6</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:12</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--orange)" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+        Review Checkpoint
+      </div>
+      <div class="step-desc">Tasks in <code>needs_review</code> wait for the lead (or you) to approve or reject. Rejected tasks get sent back with feedback.</div>
+
+      <div class="decision-split">
+        <div class="decision-option" style="border-color: var(--accent-dim);">
+          <h4 style="color: var(--accent);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+            Approve
+          </h4>
+          <p><code>approve_task(task_id: 1)</code></p>
+          <p style="margin-top: 0.3rem">Task &rarr; <strong>completed</strong></p>
+          <p>Dependent tasks auto-unblock</p>
+        </div>
+        <div class="decision-option" style="border-color: var(--red-dim);">
+          <h4 style="color: var(--red);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            Reject
+          </h4>
+          <p><code>reject_task(task_id: 1, feedback: "Missing rate limiting")</code></p>
+          <p style="margin-top: 0.3rem">Task &rarr; <strong>in_progress</strong></p>
+          <p>Feedback sent as message to teammate</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <div class="step-desc" style="margin-bottom: 0.5rem;">After all 3 tasks are approved, task #4 auto-unblocks:</div>
+        <div class="task-board">
+          <div class="task-row">
+            <span class="task-id">#1</span>
+            <span class="task-subject">Payment routing & middleware</span>
+            <span class="status-badge status-completed">completed</span>
+            <span class="task-agent">teammate-1</span>
+          </div>
+          <div class="task-row">
+            <span class="task-id">#2</span>
+            <span class="task-subject">Stripe billing integration</span>
+            <span class="status-badge status-completed">completed</span>
+            <span class="task-agent">teammate-2</span>
+          </div>
+          <div class="task-row">
+            <span class="task-id">#3</span>
+            <span class="task-subject">Billing dashboard UI</span>
+            <span class="status-badge status-completed">completed</span>
+            <span class="task-agent">teammate-3</span>
+          </div>
+          <div class="task-row">
+            <span class="task-id">#4</span>
+            <span class="task-subject">Integration tests</span>
+            <span class="status-badge status-pending">pending</span>
+            <span class="task-agent" style="color: var(--yellow)">&larr; unblocked!</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 7: Stop & PRs -->
+  <div class="step" data-step="7">
+    <div class="step-marker" style="background: var(--accent-dim); border-color: var(--accent); color: var(--accent);">7</div>
+    <div class="step-content">
+      <div class="step-time">T + 0:20</div>
+      <div class="step-title">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M15 22v-4a4.8 4.8 0 00-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 004 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65S8.93 17.38 9 18v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+        Stop Team & Create PRs
+      </div>
+      <div class="step-desc">Once all tasks are done, <code>/team-stop</code> collects results, creates a PR per teammate branch, and cleans up worktrees.</div>
+
+      <div class="terminal">
+        <div class="terminal-bar">
+          <div class="terminal-dot" style="background:#ff5f57"></div>
+          <div class="terminal-dot" style="background:#febc2e"></div>
+          <div class="terminal-dot" style="background:#28c840"></div>
+        </div>
+        <div class="terminal-body">
+          <div><span class="prompt">$</span> <span class="cmd">/team-stop</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-green">&#10003;</span> <span class="output">Team a1b2c3d4 stopped.</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Completed Tasks (4/4):</span></div>
+          <div>&nbsp; <span class="hl-dim">#1</span> <span class="output">Payment routing</span>   <span class="hl-orange">teammate-1</span>  <span class="hl-dim">8m 32s</span></div>
+          <div>&nbsp; <span class="hl-dim">#2</span> <span class="output">Stripe billing</span>    <span class="hl-blue">teammate-2</span>  <span class="hl-dim">12m 5s</span></div>
+          <div>&nbsp; <span class="hl-dim">#3</span> <span class="output">Dashboard UI</span>      <span class="hl-purple">teammate-3</span>  <span class="hl-dim">10m 18s</span></div>
+          <div>&nbsp; <span class="hl-dim">#4</span> <span class="output">Integration tests</span>  <span class="hl-orange">teammate-1</span>  <span class="hl-dim">4m 22s</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-dim">Pull Requests Created:</span></div>
+          <div>&nbsp; <span class="hl-blue">team/a1b2c3/teammate-1</span> <span class="hl-dim">&rarr;</span> <span class="hl-green">PR #42</span></div>
+          <div>&nbsp; <span class="hl-blue">team/a1b2c3/teammate-2</span> <span class="hl-dim">&rarr;</span> <span class="hl-green">PR #43</span></div>
+          <div>&nbsp; <span class="hl-blue">team/a1b2c3/teammate-3</span> <span class="hl-dim">&rarr;</span> <span class="hl-green">PR #44</span></div>
+          <div style="margin-top:0.5rem"><span class="hl-green">&#10003;</span> <span class="output">Worktrees cleaned up: 3</span></div>
+        </div>
+      </div>
+
+      <div class="summary-grid">
+        <div class="summary-stat">
+          <div class="val" style="color: var(--accent)">4</div>
+          <div class="label">Tasks Done</div>
+        </div>
+        <div class="summary-stat">
+          <div class="val" style="color: var(--blue)">3</div>
+          <div class="label">PRs Created</div>
+        </div>
+        <div class="summary-stat">
+          <div class="val" style="color: var(--orange)">3</div>
+          <div class="label">Repos Touched</div>
+        </div>
+        <div class="summary-stat">
+          <div class="val" style="color: var(--purple)">~20m</div>
+          <div class="label">Total Time</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Footer -->
+<div style="text-align: center; padding: 4rem 2rem; color: var(--text-muted); font-size: 0.8rem;">
+  <div style="font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 0.5rem; color: var(--accent);">copilot-agent-teams</div>
+  Parallel agent coordination for complex, multi-repo work
+</div>
+
+<script>
+  // Intersection Observer for scroll animations
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+      }
+    });
+  }, { threshold: 0.15, rootMargin: '0px 0px -50px 0px' });
+
+  document.querySelectorAll('.step').forEach(step => observer.observe(step));
+
+  // Path switching
+  function switchPath(path) {
+    document.querySelectorAll('.path-tab').forEach(t => t.classList.remove('active'));
+    event.target.classList.add('active');
+
+    document.querySelectorAll('.path-plan').forEach(el => {
+      el.classList.toggle('path-visible', path === 'plan');
+      el.classList.toggle('path-hidden', path !== 'plan');
+    });
+    document.querySelectorAll('.path-issues').forEach(el => {
+      el.classList.toggle('path-visible', path === 'issues');
+      el.classList.toggle('path-hidden', path !== 'issues');
+    });
+
+    // Show/hide hero repos
+    document.getElementById('hero-repos-plan').style.display = path === 'plan' ? '' : 'none';
+    document.getElementById('hero-repos-issues').style.display = path === 'issues' ? '' : 'none';
+
+    // Re-observe steps that just became visible
+    document.querySelectorAll('.step').forEach(step => {
+      if (!step.classList.contains('path-hidden')) {
+        observer.observe(step);
+      }
+    });
+  }
+</script>
+</body>
+</html>

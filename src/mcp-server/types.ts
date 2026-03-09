@@ -25,6 +25,8 @@ export interface Task {
   assigned_to: string | null;
   blocked_by: number[] | null;
   result: string | null;
+  claimed_at: number | null;
+  completed_at: number | null;
   created_at: number;
   updated_at: number;
 }
@@ -45,4 +47,14 @@ export interface Member {
   role: MemberRole;
   status: MemberStatus;
   worktree_path: string | null;
+}
+
+export interface AgentAction {
+  id: number;
+  team_id: string;
+  agent_id: string;
+  task_id: number | null;
+  action_type: string;
+  detail: string | null;
+  created_at: number;
 }

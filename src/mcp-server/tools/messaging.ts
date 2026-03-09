@@ -10,6 +10,7 @@ export function registerMessagingTools(server: McpServer, db: TeamDB): void {
       try {
         db.getActiveTeam(team_id);
         const msg = db.sendMessage(team_id, from, to, content);
+        db.logAction(team_id, from, "message_send");
         return { content: [{ type: "text", text: JSON.stringify(msg) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -23,6 +24,7 @@ export function registerMessagingTools(server: McpServer, db: TeamDB): void {
       try {
         db.getActiveTeam(team_id);
         const msg = db.sendMessage(team_id, from, null, content);
+        db.logAction(team_id, from, "message_broadcast");
         return { content: [{ type: "text", text: JSON.stringify(msg) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };

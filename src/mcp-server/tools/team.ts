@@ -10,6 +10,7 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
       try {
         const team = db.createTeam(goal, config);
         db.addMember(team.id, "lead", "lead");
+        db.logAction(team.id, "lead", "team_create");
         return { content: [{ type: "text", text: JSON.stringify(team) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -23,6 +24,7 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
       try {
         db.getActiveTeam(team_id);
         const member = db.addMember(team_id, agent_id, "teammate");
+        db.logAction(team_id, agent_id, "teammate_register");
         return { content: [{ type: "text", text: JSON.stringify(member) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
@@ -30,7 +32,7 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
     }
   );
 
-  server.tool("team_status", "Get team overview with member list and task counts",
+  server.tool("team_status", "Get team overview with member list, task counts, duration info, and last activity",
     { team_id: z.string() },
     async ({ team_id }) => {
       try {
@@ -38,7 +40,9 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
         if (!team) throw new Error(`Team '${team_id}' not found`);
         const members = db.getMembers(team_id);
         const tasks = db.countTasks(team_id);
-        return { content: [{ type: "text", text: JSON.stringify({ ...team, members, tasks }) }] };
+        const task_details = db.getTasksWithDuration(team_id);
+        const last_activity = db.getLastActivity(team_id);
+        return { content: [{ type: "text", text: JSON.stringify({ ...team, members, tasks, task_details, last_activity }) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
       }
@@ -53,10 +57,30 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
         if (!team) throw new Error(`Team '${team_id}' not found`);
         if (team.status !== "active") throw new Error(`Team '${team_id}' is not active (status: ${team.status})`);
         db.updateTeamStatus(team_id, "stopped");
+        db.logAction(team_id, "lead", "team_stop");
         const completedTasks = db.listTasks(team_id, { status: "completed", limit: 100 });
         const taskCounts = db.countTasks(team_id);
         const incomplete = taskCounts.pending + taskCounts.in_progress + taskCounts.blocked;
         return { content: [{ type: "text", text: JSON.stringify({ team_id, reason, completed_tasks: completedTasks, task_counts: taskCounts, incomplete_count: incomplete }) }] };
+      } catch (e: any) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+
+  server.tool("get_audit_log", "Get the action audit log for a team",
+    {
+      team_id: z.string(),
+      agent_id: agentIdSchema.optional(),
+      action_type: z.string().optional(),
+      limit: z.number().optional(),
+    },
+    async ({ team_id, agent_id, action_type, limit }) => {
+      try {
+        const team = db.getTeam(team_id);
+        if (!team) throw new Error(`Team '${team_id}' not found`);
+        const actions = db.getAuditLog(team_id, { agent_id, action_type, limit });
+        return { content: [{ type: "text", text: JSON.stringify(actions) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
       }
