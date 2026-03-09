@@ -12,5 +12,5 @@ if (existsSync(dbPath)) {
       for (const row of rows) console.log(`  Team ${row.id}: ${row.goal}`);
       console.log("Use /team-status to see details.");
     }
-  } catch {}
+  } catch (e) { console.error(e); }
 }

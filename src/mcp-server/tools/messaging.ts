@@ -5,7 +5,7 @@ import { agentIdSchema } from "../types.js";
 
 export function registerMessagingTools(server: McpServer, db: TeamDB): void {
   server.tool("send_message", "Send a direct message to a teammate",
-    { team_id: z.string(), from: agentIdSchema, to: agentIdSchema, content: z.string() },
+    { team_id: z.string(), from: agentIdSchema, to: agentIdSchema, content: z.string().max(10000) },
     async ({ team_id, from, to, content }) => {
       try {
         db.getActiveTeam(team_id);
@@ -18,7 +18,7 @@ export function registerMessagingTools(server: McpServer, db: TeamDB): void {
   );
 
   server.tool("broadcast", "Broadcast a message to all teammates",
-    { team_id: z.string(), from: agentIdSchema, content: z.string() },
+    { team_id: z.string(), from: agentIdSchema, content: z.string().max(10000) },
     async ({ team_id, from, content }) => {
       try {
         db.getActiveTeam(team_id);

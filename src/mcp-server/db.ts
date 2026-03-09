@@ -1,6 +1,6 @@
 import { Database } from "node-sqlite3-wasm";
 import { randomUUID } from "crypto";
-import type { Team, Task, Message, Member, TeamStatus, TaskStatus, MemberRole, MemberStatus } from "./types.js";
+import type { Team, Task, Message, Member, TeamStatus, TaskStatus, MemberRole } from "./types.js";
 
 export class TeamDB {
   private db: Database;
@@ -114,11 +114,6 @@ export class TeamDB {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as Member[];
   }
 
-  updateMemberStatus(teamId: string, agentId: string, status: MemberStatus): void {
-    const result = this.db.run("UPDATE members SET status = ? WHERE team_id = ? AND agent_id = ?", [status, teamId, agentId]);
-    if (result.changes === 0) throw new Error(`Member '${agentId}' not found in team '${teamId}'`);
-  }
-
   // --- Tasks ---
 
   createTask(teamId: string, subject: string, description?: string, assignedTo?: string, blockedBy?: number[]): Task {
@@ -154,7 +149,9 @@ export class TeamDB {
       const task = this.getTask(id);
       if (!task) throw new Error(`Task ${id} not found`);
 
-      // Enforce blocked_by dependencies
+      // Safety net: verify blockers are complete before claiming.
+      // Auto-unblock in updateTask should have already set status to "pending",
+      // but this check provides a clear error message if a task is still blocked.
       if (task.blocked_by && task.blocked_by.length > 0) {
         for (const blockerId of task.blocked_by) {
           const blocker = this.getTask(blockerId);
@@ -304,9 +301,13 @@ export class TeamDB {
       this.db.exec("BEGIN IMMEDIATE");
       try {
         const members = this.getMembers(teamId);
+        const recipients = members.filter(m => m.agent_id !== from);
+        if (recipients.length === 0) {
+          this.db.exec("ROLLBACK");
+          throw new Error("No recipients for broadcast (sender is the only member)");
+        }
         let firstId = 0;
-        for (const member of members) {
-          if (member.agent_id === from) continue;
+        for (const member of recipients) {
           const result = this.db.run(
             "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
             [teamId, from, member.agent_id, content, now]

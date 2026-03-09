@@ -12,7 +12,9 @@ MODEL="${4:-${TEAMMATE_MODEL:-claude-sonnet-4-6}}"
 PROMPT="You are $AGENT_ID on team $TEAM_ID. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: $TASK_DESC"
 
 if command -v tmux &>/dev/null && [ -n "${TMUX:-}" ]; then
-  tmux split-window -h -- copilot -a teammate -m "$MODEL" "$PROMPT"
+  # Pass prompt via env var to avoid shell interpretation issues with special characters
+  TEAMMATE_PROMPT="$PROMPT" tmux split-window -h -e "TEAMMATE_PROMPT=$PROMPT" \
+    "copilot -a teammate -m '$MODEL' \"\$TEAMMATE_PROMPT\""
   tmux select-layout tiled
   echo "Spawned $AGENT_ID in tmux pane (model: $MODEL)"
 else

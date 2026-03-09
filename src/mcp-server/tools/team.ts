@@ -51,7 +51,7 @@ export function registerTeamTools(server: McpServer, db: TeamDB): void {
       try {
         const team = db.getTeam(team_id);
         if (!team) throw new Error(`Team '${team_id}' not found`);
-        if (team.status === "stopped") throw new Error(`Team '${team_id}' is already stopped`);
+        if (team.status !== "active") throw new Error(`Team '${team_id}' is not active (status: ${team.status})`);
         db.updateTeamStatus(team_id, "stopped");
         const completedTasks = db.listTasks(team_id, { status: "completed", limit: 100 });
         const taskCounts = db.countTasks(team_id);

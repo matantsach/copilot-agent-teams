@@ -1401,6 +1401,7 @@ if ((0, import_fs.existsSync)(dbPath)) {
     if (row && row.count > 0) {
       console.log("Reminder: check copilot-agent-teams/get_messages for team messages.");
     }
-  } catch {
+  } catch (e) {
+    console.error(e);
   }
 }

@@ -31555,10 +31555,6 @@ var TeamDB = class _TeamDB {
   getMembers(teamId) {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]);
   }
-  updateMemberStatus(teamId, agentId, status) {
-    const result = this.db.run("UPDATE members SET status = ? WHERE team_id = ? AND agent_id = ?", [status, teamId, agentId]);
-    if (result.changes === 0) throw new Error(`Member '${agentId}' not found in team '${teamId}'`);
-  }
   // --- Tasks ---
   createTask(teamId, subject, description, assignedTo, blockedBy) {
     if (blockedBy && blockedBy.length > 0) {
@@ -31707,9 +31703,13 @@ var TeamDB = class _TeamDB {
       this.db.exec("BEGIN IMMEDIATE");
       try {
         const members = this.getMembers(teamId);
+        const recipients = members.filter((m) => m.agent_id !== from);
+        if (recipients.length === 0) {
+          this.db.exec("ROLLBACK");
+          throw new Error("No recipients for broadcast (sender is the only member)");
+        }
         let firstId = 0;
-        for (const member of members) {
-          if (member.agent_id === from) continue;
+        for (const member of recipients) {
           const result2 = this.db.run(
             "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
             [teamId, from, member.agent_id, content, now]
@@ -31813,7 +31813,7 @@ function registerTeamTools(server2, db2) {
       try {
         const team = db2.getTeam(team_id);
         if (!team) throw new Error(`Team '${team_id}' not found`);
-        if (team.status === "stopped") throw new Error(`Team '${team_id}' is already stopped`);
+        if (team.status !== "active") throw new Error(`Team '${team_id}' is not active (status: ${team.status})`);
         db2.updateTeamStatus(team_id, "stopped");
         const completedTasks = db2.listTasks(team_id, { status: "completed", limit: 100 });
         const taskCounts = db2.countTasks(team_id);
@@ -31833,8 +31833,8 @@ function registerTaskTools(server2, db2) {
     "Create a task on the team board",
     {
       team_id: external_exports.string(),
-      subject: external_exports.string(),
-      description: external_exports.string().optional(),
+      subject: external_exports.string().max(200),
+      description: external_exports.string().max(1e4).optional(),
       assigned_to: agentIdSchema.optional(),
       blocked_by: external_exports.array(external_exports.number()).optional()
     },
@@ -31869,7 +31869,7 @@ function registerTaskTools(server2, db2) {
     "Update task status. result required when completing.",
     {
       task_id: external_exports.number(),
-      status: external_exports.enum(["in_progress", "completed", "blocked"]),
+      status: external_exports.enum(["completed", "blocked"]),
       result: external_exports.string().optional()
     },
     async ({ task_id, status, result }) => {
@@ -31887,7 +31887,7 @@ function registerTaskTools(server2, db2) {
   server2.tool(
     "reassign_task",
     "Reset a stuck in_progress task back to pending (lead-only, enforced)",
-    { task_id: external_exports.number(), agent_id: agentIdSchema, reason: external_exports.string().optional() },
+    { task_id: external_exports.number(), agent_id: agentIdSchema },
     async ({ task_id, agent_id }) => {
       try {
         const existingTask = db2.getTask(task_id);
@@ -31926,7 +31926,7 @@ function registerMessagingTools(server2, db2) {
   server2.tool(
     "send_message",
     "Send a direct message to a teammate",
-    { team_id: external_exports.string(), from: agentIdSchema, to: agentIdSchema, content: external_exports.string() },
+    { team_id: external_exports.string(), from: agentIdSchema, to: agentIdSchema, content: external_exports.string().max(1e4) },
     async ({ team_id, from, to, content }) => {
       try {
         db2.getActiveTeam(team_id);
@@ -31940,7 +31940,7 @@ function registerMessagingTools(server2, db2) {
   server2.tool(
     "broadcast",
     "Broadcast a message to all teammates",
-    { team_id: external_exports.string(), from: agentIdSchema, content: external_exports.string() },
+    { team_id: external_exports.string(), from: agentIdSchema, content: external_exports.string().max(1e4) },
     async ({ team_id, from, content }) => {
       try {
         db2.getActiveTeam(team_id);

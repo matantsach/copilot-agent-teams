@@ -7,8 +7,8 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
   server.tool("create_task", "Create a task on the team board",
     {
       team_id: z.string(),
-      subject: z.string(),
-      description: z.string().optional(),
+      subject: z.string().max(200),
+      description: z.string().max(10000).optional(),
       assigned_to: agentIdSchema.optional(),
       blocked_by: z.array(z.number()).optional(),
     },
@@ -41,7 +41,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
   server.tool("update_task", "Update task status. result required when completing.",
     {
       task_id: z.number(),
-      status: z.enum(["in_progress", "completed", "blocked"]),
+      status: z.enum(["completed", "blocked"]),
       result: z.string().optional(),
     },
     async ({ task_id, status, result }) => {
@@ -58,7 +58,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
   );
 
   server.tool("reassign_task", "Reset a stuck in_progress task back to pending (lead-only, enforced)",
-    { task_id: z.number(), agent_id: agentIdSchema, reason: z.string().optional() },
+    { task_id: z.number(), agent_id: agentIdSchema },
     async ({ task_id, agent_id }) => {
       try {
         const existingTask = db.getTask(task_id);

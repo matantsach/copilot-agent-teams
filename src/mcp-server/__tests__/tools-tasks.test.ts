@@ -73,7 +73,8 @@ describe("Task Board Tools", () => {
     const task = db.createTask(team.id, "Do thing");
     db.claimTask(task.id, "teammate-1");
     db.updateTask(task.id, "completed", "Done");
-    const result = await client.callTool({ name: "update_task", arguments: { task_id: task.id, status: "pending" } });
+    // completed → blocked is invalid
+    const result = await client.callTool({ name: "update_task", arguments: { task_id: task.id, status: "blocked" } });
     expect(result.isError).toBe(true);
   });
 
