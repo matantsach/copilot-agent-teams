@@ -28,7 +28,7 @@ export class TeamDB {
         team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
         subject TEXT NOT NULL,
         description TEXT,
-        status TEXT DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed','blocked')),
+        status TEXT DEFAULT 'pending' CHECK(status IN ('pending','in_progress','completed','blocked','needs_review')),
         assigned_to TEXT,
         blocked_by TEXT,
         result TEXT,
@@ -186,8 +186,9 @@ export class TeamDB {
 
   // Valid state transitions (claim_task handles pending→in_progress)
   private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
-    in_progress: ["completed", "blocked"],
+    in_progress: ["completed", "blocked", "needs_review"],
     blocked: ["pending"], // auto-unblock only, not direct
+    needs_review: ["completed", "in_progress"], // approve or reject
   };
 
   updateTask(id: number, status: TaskStatus, result?: string): Task {
@@ -202,16 +203,25 @@ export class TeamDB {
       const task = this.getTask(id);
       if (!task) throw new Error(`Task ${id} not found`);
 
-      // Enforce state transitions
-      const allowed = TeamDB.VALID_TRANSITIONS[task.status];
-      if (!allowed || !allowed.includes(status)) {
-        throw new Error(`Invalid transition: ${task.status} → ${status}`);
+      // Check if review is required
+      let effectiveStatus: TaskStatus = status;
+      if (status === "completed") {
+        const team = this.getTeam(task.team_id);
+        if (team?.config && (team.config as any).review_required === true) {
+          effectiveStatus = "needs_review";
+        }
       }
 
-      this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [status, result ?? null, Date.now(), id]);
+      // Enforce state transitions
+      const allowed = TeamDB.VALID_TRANSITIONS[task.status];
+      if (!allowed || !allowed.includes(effectiveStatus)) {
+        throw new Error(`Invalid transition: ${task.status} → ${effectiveStatus}`);
+      }
+
+      this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, Date.now(), id]);
 
       // Auto-unblock: when a task completes, check if it unblocks others
-      if (status === "completed") {
+      if (effectiveStatus === "completed") {
         const blocked = this.db.all(
           "SELECT id, blocked_by FROM tasks WHERE team_id = ? AND status IN ('blocked', 'pending') AND blocked_by IS NOT NULL",
           [task.team_id]
@@ -258,13 +268,82 @@ export class TeamDB {
     return this.getTask(id)!;
   }
 
+  approveTask(id: number, callerAgentId: string): Task {
+    const task = this.getTask(id);
+    if (!task) throw new Error(`Task ${id} not found`);
+    if (task.status !== "needs_review") throw new Error(`Task ${id} is not in needs_review status (status: ${task.status})`);
+
+    // Enforce lead-only
+    const members = this.getMembers(task.team_id);
+    const caller = members.find(m => m.agent_id === callerAgentId);
+    if (!caller || caller.role !== "lead") {
+      throw new Error("Only the team lead can approve tasks");
+    }
+
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      this.db.run("UPDATE tasks SET status = 'completed', updated_at = ? WHERE id = ?", [Date.now(), id]);
+
+      // Auto-unblock dependent tasks (same logic as updateTask completion)
+      const blocked = this.db.all(
+        "SELECT id, blocked_by FROM tasks WHERE team_id = ? AND status IN ('blocked', 'pending') AND blocked_by IS NOT NULL",
+        [task.team_id]
+      ) as any[];
+
+      for (const row of blocked) {
+        const blockers: number[] = JSON.parse(row.blocked_by);
+        if (blockers.includes(id)) {
+          const allResolved = blockers.every((bid: number) => {
+            const b = this.getTask(bid);
+            return b && b.status === "completed";
+          });
+          if (allResolved) {
+            this.db.run("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ?", [Date.now(), row.id]);
+          }
+        }
+      }
+
+      this.db.exec("COMMIT");
+      return this.getTask(id)!;
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
+
+  rejectTask(id: number, callerAgentId: string, feedback: string): Task {
+    const task = this.getTask(id);
+    if (!task) throw new Error(`Task ${id} not found`);
+    if (task.status !== "needs_review") throw new Error(`Task ${id} is not in needs_review status (status: ${task.status})`);
+
+    // Enforce lead-only
+    const members = this.getMembers(task.team_id);
+    const caller = members.find(m => m.agent_id === callerAgentId);
+    if (!caller || caller.role !== "lead") {
+      throw new Error("Only the team lead can reject tasks");
+    }
+
+    // Reset to in_progress so the assigned agent can rework
+    this.db.run(
+      "UPDATE tasks SET status = 'in_progress', updated_at = ? WHERE id = ?",
+      [Date.now(), id]
+    );
+
+    // Send feedback as a message to the assigned agent
+    if (task.assigned_to) {
+      this.sendMessage(task.team_id, callerAgentId, task.assigned_to, `Task "${task.subject}" rejected: ${feedback}`);
+    }
+
+    return this.getTask(id)!;
+  }
+
   countTasks(teamId: string): Record<TaskStatus | "total", number> {
     const rows = this.db.all(
       "SELECT status, COUNT(*) as count FROM tasks WHERE team_id = ? GROUP BY status",
       [teamId]
     ) as Array<{ status: string; count: number }>;
 
-    const counts: Record<string, number> = { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0 };
+    const counts: Record<string, number> = { total: 0, pending: 0, in_progress: 0, completed: 0, blocked: 0, needs_review: 0 };
     for (const row of rows) {
       counts[row.status] = row.count;
       counts.total += row.count;

@@ -14,5 +14,5 @@ Show a dashboard of team progress.
 2. Format the response as a readable dashboard:
    - **Team**: goal and status
    - **Members**: name and role for each
-   - **Tasks**: counts by status (pending / in_progress / completed / blocked)
-3. Highlight any blocked tasks or teammates that appear stuck
+   - **Tasks**: counts by status (pending / in_progress / completed / blocked / needs_review)
+3. Highlight any blocked tasks, tasks awaiting review, or teammates that appear stuck

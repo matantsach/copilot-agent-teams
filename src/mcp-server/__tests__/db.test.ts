@@ -202,6 +202,108 @@ describe("TeamDB", () => {
       expect(page).toHaveLength(2);
       expect(page[0].subject).toBe("Task 2");
     });
+
+    it("updateTask routes to needs_review when review_required is set in team config", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      const updated = db.updateTask(task.id, "completed", "Done");
+      expect(updated.status).toBe("needs_review");
+      expect(updated.result).toBe("Done");
+    });
+
+    it("updateTask completes directly when review_required is not set", () => {
+      const team = db.createTeam("Test");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      const updated = db.updateTask(task.id, "completed", "Done");
+      expect(updated.status).toBe("completed");
+    });
+
+    it("approveTask moves needs_review to completed (lead-only)", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "completed", "Done");
+      // Should be in needs_review
+      expect(db.getTask(task.id)!.status).toBe("needs_review");
+      const approved = db.approveTask(task.id, "lead");
+      expect(approved.status).toBe("completed");
+    });
+
+    it("approveTask triggers auto-unblock of dependent tasks", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const t1 = db.createTask(team.id, "First");
+      const t2 = db.createTask(team.id, "Second", undefined, undefined, [t1.id]);
+      expect(t2.status).toBe("blocked");
+
+      db.claimTask(t1.id, "teammate-1");
+      db.updateTask(t1.id, "completed", "Done");
+      // t1 is needs_review, t2 should still be blocked
+      expect(db.getTask(t2.id)!.status).toBe("blocked");
+
+      db.approveTask(t1.id, "lead");
+      // Now t2 should be unblocked
+      expect(db.getTask(t2.id)!.status).toBe("pending");
+    });
+
+    it("approveTask rejects non-lead callers", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "completed", "Done");
+      expect(() => db.approveTask(task.id, "teammate-1")).toThrow("Only the team lead");
+    });
+
+    it("approveTask rejects tasks not in needs_review", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      expect(() => db.approveTask(task.id, "lead")).toThrow("not in needs_review");
+    });
+
+    it("rejectTask moves needs_review to in_progress with feedback message (lead-only)", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "completed", "Done");
+      const rejected = db.rejectTask(task.id, "lead", "Needs more tests");
+      expect(rejected.status).toBe("in_progress");
+      // Feedback message should be sent to the assigned agent
+      const msgs = db.getMessages(team.id, "teammate-1");
+      expect(msgs).toHaveLength(1);
+      expect(msgs[0].content).toContain("rejected");
+      expect(msgs[0].content).toContain("Needs more tests");
+    });
+
+    it("rejectTask rejects non-lead callers", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "completed", "Done");
+      expect(() => db.rejectTask(task.id, "teammate-1", "Bad")).toThrow("Only the team lead");
+    });
+
+    it("countTasks includes needs_review count", () => {
+      const team = db.createTeam("Test", { review_required: true });
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "completed", "Done");
+      const c = db.countTasks(team.id);
+      expect(c.needs_review).toBe(1);
+      expect(c.total).toBe(1);
+    });
   });
 
   describe("messages", () => {
