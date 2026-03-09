@@ -5,7 +5,7 @@ Thanks for your interest in contributing to copilot-agent-teams!
 ## Development Setup
 
 ```bash
-git clone https://github.com/mtsach/copilot-agent-teams.git
+git clone https://github.com/matantsach/copilot-agent-teams.git
 cd copilot-agent-teams
 npm install
 npm test
