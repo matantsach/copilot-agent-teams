@@ -82,8 +82,7 @@ const shared = {
   bundle: true,
   platform: "node",
   target: "node20",
-  format: "esm",
-  banner: { js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);" },
+  format: "cjs",
 };
 
 await Promise.all([
@@ -475,11 +474,35 @@ describe("TeamDB", () => {
       expect(msgs[0].content).toBe("Start");
     });
 
-    it("broadcast delivers to all except sender", () => {
+    it("broadcast expands to per-recipient rows — independent read tracking", () => {
       const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.addMember(team.id, "teammate-2", "teammate");
+
       db.sendMessage(team.id, "lead", null, "All hands");
+
+      // Each non-sender gets their own copy
       expect(db.getMessages(team.id, "teammate-1")).toHaveLength(1);
+      expect(db.getMessages(team.id, "teammate-2")).toHaveLength(1);
+      // Sender excluded
       expect(db.getMessages(team.id, "lead")).toHaveLength(0);
+    });
+
+    it("broadcast read-tracking is per-recipient", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.addMember(team.id, "teammate-2", "teammate");
+
+      db.sendMessage(team.id, "lead", null, "Broadcast");
+
+      // teammate-1 reads it
+      expect(db.getMessages(team.id, "teammate-1")).toHaveLength(1);
+      expect(db.getMessages(team.id, "teammate-1")).toHaveLength(0); // already read
+
+      // teammate-2 still has their unread copy
+      expect(db.getMessages(team.id, "teammate-2")).toHaveLength(1);
     });
 
     it("marks as read atomically — second call returns empty", () => {
@@ -759,6 +782,23 @@ export class TeamDB {
 
   sendMessage(teamId: string, from: string, to: string | null, content: string): Message {
     const now = Date.now();
+
+    if (to === null) {
+      // Broadcast: expand to one row per recipient (excluding sender)
+      const members = this.getMembers(teamId);
+      let firstId = 0;
+      for (const member of members) {
+        if (member.agent_id === from) continue;
+        const result = this.db.run(
+          "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
+          [teamId, from, member.agent_id, content, now]
+        );
+        if (!firstId) firstId = Number(result.lastInsertRowid);
+      }
+      return { id: firstId, team_id: teamId, from_agent: from, to_agent: null, content, read: false, created_at: now };
+    }
+
+    // Direct message: single row
     const result = this.db.run(
       "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
       [teamId, from, to, content, now]
@@ -771,8 +811,8 @@ export class TeamDB {
     // node-sqlite3-wasm: use explicit BEGIN/COMMIT
     this.db.exec("BEGIN IMMEDIATE");
     try {
-      let sql = "SELECT * FROM messages WHERE team_id = ? AND read = 0 AND (to_agent = ? OR to_agent IS NULL) AND from_agent != ?";
-      const params: unknown[] = [teamId, forAgent, forAgent];
+      let sql = "SELECT * FROM messages WHERE team_id = ? AND read = 0 AND to_agent = ?";
+      const params: unknown[] = [teamId, forAgent];
       if (since !== undefined) { sql += " AND created_at >= ?"; params.push(since); }
       sql += " ORDER BY created_at ASC";
 
@@ -962,7 +1002,7 @@ import { existsSync } from "fs";
 const dbPath = ".copilot-teams/teams.db";
 if (existsSync(dbPath)) {
   try {
-    const db = new Database(dbPath, { readOnly: true });
+    const db = new Database(dbPath);
     const rows = db.all("SELECT id, goal FROM teams WHERE status = 'active'") as any[];
     db.close();
     if (rows.length > 0) {
@@ -983,7 +1023,7 @@ import { existsSync } from "fs";
 const dbPath = ".copilot-teams/teams.db";
 if (existsSync(dbPath)) {
   try {
-    const db = new Database(dbPath, { readOnly: true });
+    const db = new Database(dbPath);
     const row = db.get("SELECT COUNT(*) as count FROM teams WHERE status = 'active'") as any;
     db.close();
     if (row && row.count > 0) {

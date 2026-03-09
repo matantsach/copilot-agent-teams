@@ -67,8 +67,8 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 | Tool | Parameters | Purpose |
 |------|-----------|---------|
 | `send_message` | `team_id`, `from`, `to`, `content` | Direct message to a teammate or "lead". |
-| `broadcast` | `team_id`, `from`, `content` | Message all teammates. |
-| `get_messages` | `team_id`, `for_agent`, `since?` | Poll inbox. Returns unread messages. Atomic read-and-mark-as-read. |
+| `broadcast` | `team_id`, `from`, `content` | Message all teammates. Expands to per-recipient rows so each agent has independent read tracking. |
+| `get_messages` | `team_id`, `for_agent`, `since?` | Poll inbox. Returns unread messages. Atomic read-and-mark-as-read. Per-recipient tracking for broadcasts. |
 
 ### Design Decisions
 
@@ -175,7 +175,7 @@ CREATE TABLE messages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
   from_agent TEXT NOT NULL,
-  to_agent TEXT,                -- null = broadcast
+  to_agent TEXT,                -- null = broadcast (expanded to per-recipient rows)
   content TEXT NOT NULL,
   read INTEGER DEFAULT 0,
   created_at INTEGER NOT NULL
