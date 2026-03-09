@@ -31764,7 +31764,7 @@ function registerTeamTools(server2, db2) {
   server2.tool(
     "create_team",
     "Create a new agent team and register caller as lead",
-    { goal: external_exports.string(), config: external_exports.record(external_exports.unknown()).optional() },
+    { goal: external_exports.string(), config: external_exports.record(external_exports.string(), external_exports.unknown()).optional() },
     async ({ goal, config: config2 }) => {
       try {
         const team = db2.createTeam(goal, config2);

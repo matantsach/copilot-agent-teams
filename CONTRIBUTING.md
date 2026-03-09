@@ -16,9 +16,10 @@ npm test
 1. Fork the repo and create a branch from `main`
 2. Make your changes
 3. Add tests for new functionality
-4. Run `npm test` to verify all tests pass
-5. Run `npm run build` to verify the build succeeds
-6. Submit a pull request
+4. Run `npm run typecheck` to verify types
+5. Run `npm test` to verify all tests pass
+6. Run `npm run build` to verify the build succeeds
+7. Submit a pull request
 
 ## Project Structure
 
@@ -42,6 +43,7 @@ dist/                  # Built output (committed for plugin install)
 ## Testing
 
 ```bash
+npm run typecheck     # type check
 npm test              # run all tests
 npm run test:watch    # watch mode
 ```

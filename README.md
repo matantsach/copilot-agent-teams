@@ -1,5 +1,7 @@
 # copilot-agent-teams
 
+[![CI](https://github.com/MatanTsach/copilot-agent-teams/actions/workflows/ci.yml/badge.svg)](https://github.com/MatanTsach/copilot-agent-teams/actions/workflows/ci.yml)
+
 Multi-agent team coordination plugin for GitHub Copilot CLI. A team lead decomposes complex goals into tasks, spawns teammates that work on independent subtasks, and coordinates them via a shared task board and direct messaging.
 
 ## Install

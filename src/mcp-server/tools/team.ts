@@ -5,7 +5,7 @@ import { agentIdSchema } from "../types.js";
 
 export function registerTeamTools(server: McpServer, db: TeamDB): void {
   server.tool("create_team", "Create a new agent team and register caller as lead",
-    { goal: z.string(), config: z.record(z.unknown()).optional() },
+    { goal: z.string(), config: z.record(z.string(), z.unknown()).optional() },
     async ({ goal, config }) => {
       try {
         const team = db.createTeam(goal, config);

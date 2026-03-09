@@ -111,7 +111,7 @@ export class TeamDB {
   }
 
   getMembers(teamId: string): Member[] {
-    return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as Member[];
+    return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as unknown as Member[];
   }
 
   // --- Tasks ---
@@ -274,7 +274,7 @@ export class TeamDB {
 
   listTasks(teamId: string, filter?: { status?: TaskStatus; assigned_to?: string; limit?: number; offset?: number }): Task[] {
     let sql = "SELECT * FROM tasks WHERE team_id = ?";
-    const params: unknown[] = [teamId];
+    const params: (string | number)[] = [teamId];
 
     if (filter?.status) { sql += " AND status = ?"; params.push(filter.status); }
     if (filter?.assigned_to) { sql += " AND assigned_to = ?"; params.push(filter.assigned_to); }
@@ -340,7 +340,7 @@ export class TeamDB {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       let sql = "SELECT * FROM messages WHERE team_id = ? AND read = 0 AND to_agent = ?";
-      const params: unknown[] = [teamId, forAgent];
+      const params: (string | number)[] = [teamId, forAgent];
       if (since !== undefined) { sql += " AND created_at >= ?"; params.push(since); }
       sql += " ORDER BY created_at ASC";
 
