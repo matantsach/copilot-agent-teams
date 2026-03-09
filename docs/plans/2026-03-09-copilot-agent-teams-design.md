@@ -26,7 +26,8 @@ copilot-agent-teams/
 │       │   └── messaging.ts     # send_message, get_messages, broadcast
 │       └── types.ts             # Shared types
 ├── src/hooks/
-│   └── check-active-teams.ts    # Node.js hook script (no system sqlite3 dependency)
+│   ├── check-active-teams.ts    # sessionStart hook (Node.js, no system sqlite3)
+│   └── nudge-messages.ts        # postToolUse hook (conditional, silent when no teams)
 ├── agents/
 │   ├── team-lead.agent.md       # Orchestrator agent
 │   └── teammate.agent.md        # Base teammate agent
@@ -37,7 +38,7 @@ copilot-agent-teams/
 └── README.md
 ```
 
-**Build strategy:** The MCP server and hook scripts are bundled with esbuild into single-file outputs in `dist/`. The `dist/` directory is committed to the repo because `/plugin install` does not run build steps.
+**Build strategy:** The MCP server and hook scripts are bundled with esbuild into `dist/` (JS output + WASM sidecar). The `dist/` directory is committed to the repo because `/plugin install` does not run build steps. Uses `node-sqlite3-wasm` (WASM-based, no native addons) so the bundle is fully portable across platforms.
 
 ## MCP Server Tools
 
@@ -56,8 +57,8 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 
 | Tool | Parameters | Purpose |
 |------|-----------|---------|
-| `create_task` | `team_id`, `subject`, `description?`, `assigned_to?`, `blocked_by?` | Add task to the board. `blocked_by` is an array of task IDs. |
-| `claim_task` | `task_id`, `agent_id` | Atomically claim an unassigned task. Enforces blocked_by — rejects if blockers incomplete. |
+| `create_task` | `team_id`, `subject`, `description?`, `assigned_to?`, `blocked_by?` | Add task. `blocked_by` is an array of task IDs (validated to exist in same team). Tasks with blockers auto-set to `blocked` status. |
+| `claim_task` | `task_id`, `agent_id` | Atomically claim a task. Enforces blocked_by. Respects pre-assignment — only the assigned agent or anyone if unassigned. |
 | `update_task` | `task_id`, `status`, `result?` | Mark in_progress/completed/blocked. `result` required when completing. |
 | `list_tasks` | `team_id`, `status?`, `assigned_to?`, `limit?`, `offset?` | Paginated task list, filterable by status/assignee. Default limit 20. |
 
@@ -74,10 +75,11 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 - **No real-time push** — agents poll `get_messages`. The `postToolUse` hook nudges agents to check after completing work.
 - **Results on tasks** — when completing a task, the teammate writes a summary to `result`. The lead reads these to synthesize without needing full teammate context.
 - **Agent IDs** — validated format: `^[a-z0-9-]+$`, max 50 chars. Examples: "lead", "teammate-1", "teammate-2".
-- **Atomic claim** — `claim_task` uses a single atomic SQL UPDATE with WHERE guard to prevent TOCTOU races across concurrent processes.
-- **Dependency enforcement** — `claim_task` checks that all `blocked_by` tasks have `completed` status before allowing a claim.
-- **Team existence check** — all tools that take `team_id` verify the team exists and is active before proceeding.
-- **All tool handlers wrap JSON.parse in try-catch** — returns `isError: true` with helpful messages on invalid input.
+- **Atomic claim** — `claim_task` uses a single atomic SQL UPDATE: `WHERE id = ? AND status = 'pending' AND (assigned_to IS NULL OR assigned_to = ?)`. Prevents TOCTOU races and respects pre-assignment.
+- **Dependency enforcement** — `claim_task` checks that all `blocked_by` tasks are `completed` before allowing a claim. Tasks with blockers are auto-set to `blocked` on creation; auto-unblocked (set to `pending`) when all blockers complete.
+- **Blocker validation** — `create_task` validates that all `blocked_by` task IDs exist and belong to the same team.
+- **Team existence check** — all mutating tools verify the team exists and is active. Read-only tools (`team_status`, `get_messages`) allow querying stopped teams.
+- **Zod-typed schemas** — all tool inputs are validated via Zod (e.g., `blocked_by` is `z.array(z.number())`). No raw JSON.parse in tool handlers.
 
 ## Team Lead Agent
 
@@ -142,7 +144,7 @@ Behavior:
 Uses Copilot CLI hooks.json v1 schema:
 
 - **`sessionStart`** — Node.js script checks `.copilot-teams/teams.db` for active teams. Prints reminder with team IDs and goals.
-- **`postToolUse`** — Reminds agents to check `get_messages` after completing tool calls (solves the polling problem).
+- **`postToolUse`** — Node.js script checks if active teams exist before printing a message reminder. Silent when no teams are active (no noise for non-team workflows).
 
 ## SQLite Schema
 
