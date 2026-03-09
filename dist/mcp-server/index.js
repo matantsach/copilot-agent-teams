@@ -31607,6 +31607,24 @@ var TeamDB = class _TeamDB {
       throw e;
     }
   }
+  autoUnblockDependents(taskId, teamId) {
+    const blocked = this.db.all(
+      "SELECT id, blocked_by FROM tasks WHERE team_id = ? AND status IN ('blocked', 'pending') AND blocked_by IS NOT NULL",
+      [teamId]
+    );
+    for (const row of blocked) {
+      const blockers = JSON.parse(row.blocked_by);
+      if (blockers.includes(taskId)) {
+        const allResolved = blockers.every((bid) => {
+          const b = this.getTask(bid);
+          return b && b.status === "completed";
+        });
+        if (allResolved) {
+          this.db.run("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ?", [Date.now(), row.id]);
+        }
+      }
+    }
+  }
   // Valid state transitions (claim_task handles pending→in_progress)
   static VALID_TRANSITIONS = {
     in_progress: ["completed", "blocked", "needs_review"],
@@ -31626,7 +31644,7 @@ var TeamDB = class _TeamDB {
       let effectiveStatus = status;
       if (status === "completed") {
         const team = this.getTeam(task.team_id);
-        if (team?.config && team.config.review_required === true) {
+        if (team?.config?.review_required === true) {
           effectiveStatus = "needs_review";
         }
       }
@@ -31636,22 +31654,7 @@ var TeamDB = class _TeamDB {
       }
       this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, Date.now(), id]);
       if (effectiveStatus === "completed") {
-        const blocked = this.db.all(
-          "SELECT id, blocked_by FROM tasks WHERE team_id = ? AND status IN ('blocked', 'pending') AND blocked_by IS NOT NULL",
-          [task.team_id]
-        );
-        for (const row of blocked) {
-          const blockers = JSON.parse(row.blocked_by);
-          if (blockers.includes(id)) {
-            const allResolved = blockers.every((bid) => {
-              const b = this.getTask(bid);
-              return b && b.status === "completed";
-            });
-            if (allResolved) {
-              this.db.run("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ?", [Date.now(), row.id]);
-            }
-          }
-        }
+        this.autoUnblockDependents(id, task.team_id);
       }
       this.db.exec("COMMIT");
       return this.getTask(id);
@@ -31687,22 +31690,7 @@ var TeamDB = class _TeamDB {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       this.db.run("UPDATE tasks SET status = 'completed', updated_at = ? WHERE id = ?", [Date.now(), id]);
-      const blocked = this.db.all(
-        "SELECT id, blocked_by FROM tasks WHERE team_id = ? AND status IN ('blocked', 'pending') AND blocked_by IS NOT NULL",
-        [task.team_id]
-      );
-      for (const row of blocked) {
-        const blockers = JSON.parse(row.blocked_by);
-        if (blockers.includes(id)) {
-          const allResolved = blockers.every((bid) => {
-            const b = this.getTask(bid);
-            return b && b.status === "completed";
-          });
-          if (allResolved) {
-            this.db.run("UPDATE tasks SET status = 'pending', updated_at = ? WHERE id = ?", [Date.now(), row.id]);
-          }
-        }
-      }
+      this.autoUnblockDependents(id, task.team_id);
       this.db.exec("COMMIT");
       return this.getTask(id);
     } catch (e) {
