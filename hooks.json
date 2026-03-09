@@ -1,4 +1,19 @@
 {
   "version": 1,
-  "hooks": {}
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "node dist/hooks/check-active-teams.js",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "test -f .copilot-teams/teams.db && node dist/hooks/nudge-messages.js",
+        "timeoutSec": 3
+      }
+    ]
+  }
 }
