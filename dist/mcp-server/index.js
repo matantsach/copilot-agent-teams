@@ -31514,7 +31514,7 @@ var TeamDB = class _TeamDB {
         task_id INTEGER,
         action_type TEXT NOT NULL,
         detail TEXT,
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_actions_team ON agent_actions(team_id, created_at);
     `);
@@ -31694,7 +31694,7 @@ var TeamDB = class _TeamDB {
       throw new Error(`Only the team lead can reassign tasks`);
     }
     this.db.run(
-      "UPDATE tasks SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
+      "UPDATE tasks SET status = 'pending', assigned_to = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?",
       [Date.now(), id]
     );
     return this.getTask(id);

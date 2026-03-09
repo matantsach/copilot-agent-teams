@@ -1,6 +1,6 @@
 import { Database } from "node-sqlite3-wasm";
 import { randomUUID } from "crypto";
-import type { Team, Task, Message, Member, TeamStatus, TaskStatus, MemberRole } from "./types.js";
+import type { Team, Task, Message, Member, AgentAction, TeamStatus, TaskStatus, MemberRole } from "./types.js";
 
 export class TeamDB {
   private db: Database;
@@ -63,7 +63,7 @@ export class TeamDB {
         task_id INTEGER,
         action_type TEXT NOT NULL,
         detail TEXT,
-        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        created_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_actions_team ON agent_actions(team_id, created_at);
     `);
@@ -142,7 +142,7 @@ export class TeamDB {
     return this.db.all(
       "SELECT agent_id, worktree_path FROM members WHERE team_id = ? AND worktree_path IS NOT NULL",
       [teamId]
-    ) as any[];
+    ) as unknown as Array<{ agent_id: string; worktree_path: string }>;
   }
 
   // --- Tasks ---
@@ -275,7 +275,7 @@ export class TeamDB {
     }
 
     this.db.run(
-      "UPDATE tasks SET status = 'pending', assigned_to = NULL, updated_at = ? WHERE id = ?",
+      "UPDATE tasks SET status = 'pending', assigned_to = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?",
       [Date.now(), id]
     );
     return this.getTask(id)!;
@@ -385,7 +385,7 @@ export class TeamDB {
     );
   }
 
-  getAuditLog(teamId: string, filter?: { agent_id?: string; action_type?: string; limit?: number }): any[] {
+  getAuditLog(teamId: string, filter?: { agent_id?: string; action_type?: string; limit?: number }): AgentAction[] {
     let sql = "SELECT * FROM agent_actions WHERE team_id = ?";
     const params: (string | number)[] = [teamId];
 
@@ -395,7 +395,7 @@ export class TeamDB {
     sql += " ORDER BY created_at DESC LIMIT ?";
     params.push(filter?.limit ?? 50);
 
-    return this.db.all(sql, params) as any[];
+    return this.db.all(sql, params) as unknown as AgentAction[];
   }
 
   // --- Observability ---

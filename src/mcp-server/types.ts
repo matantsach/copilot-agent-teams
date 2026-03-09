@@ -48,3 +48,13 @@ export interface Member {
   status: MemberStatus;
   worktree_path: string | null;
 }
+
+export interface AgentAction {
+  id: number;
+  team_id: string;
+  agent_id: string;
+  task_id: number | null;
+  action_type: string;
+  detail: string | null;
+  created_at: number;
+}
