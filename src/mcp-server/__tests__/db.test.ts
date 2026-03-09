@@ -60,6 +60,41 @@ describe("TeamDB", () => {
       db.addMember(team.id, "lead", "lead"); // should not throw
       expect(db.getMembers(team.id)).toHaveLength(1);
     });
+
+    it("addMember with worktree_path stores the path", () => {
+      const team = db.createTeam("Test");
+      const member = db.addMember(team.id, "teammate-1", "teammate", "/tmp/worktree-1");
+      expect(member.worktree_path).toBe("/tmp/worktree-1");
+      const members = db.getMembers(team.id);
+      expect(members[0].worktree_path).toBe("/tmp/worktree-1");
+    });
+
+    it("updateMemberWorktree updates the path", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.updateMemberWorktree(team.id, "teammate-1", "/tmp/new-worktree");
+      const members = db.getMembers(team.id);
+      expect(members[0].worktree_path).toBe("/tmp/new-worktree");
+    });
+
+    it("getWorktrees returns members with worktree paths", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "teammate-1", "teammate", "/tmp/wt-1");
+      db.addMember(team.id, "teammate-2", "teammate", "/tmp/wt-2");
+      const worktrees = db.getWorktrees(team.id);
+      expect(worktrees).toHaveLength(2);
+      expect(worktrees[0].agent_id).toBe("teammate-1");
+      expect(worktrees[0].worktree_path).toBe("/tmp/wt-1");
+    });
+
+    it("getWorktrees excludes members without worktree paths", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate", "/tmp/wt-1");
+      const worktrees = db.getWorktrees(team.id);
+      expect(worktrees).toHaveLength(1);
+      expect(worktrees[0].agent_id).toBe("teammate-1");
+    });
   });
 
   describe("tasks", () => {
