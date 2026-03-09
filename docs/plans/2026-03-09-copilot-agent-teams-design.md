@@ -51,7 +51,7 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 | `create_team` | `goal`, `config?` | Create a team. Returns team_id. Registers the caller as lead. |
 | `team_status` | `team_id` | Team overview: members, task progress counts. |
 | `stop_team` | `team_id`, `reason?` | Wind down team, collect completed task results. |
-| `register_teammate` | `team_id`, `agent_id` | Teammate self-registers on spawn. Required before using other tools. |
+| `register_teammate` | `team_id`, `agent_id` | Teammate self-registers on spawn. Idempotent — safe to retry on failure. Required before using other tools. |
 
 ### Task Board
 
@@ -59,7 +59,8 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 |------|-----------|---------|
 | `create_task` | `team_id`, `subject`, `description?`, `assigned_to?`, `blocked_by?` | Add task. `blocked_by` is an array of task IDs (validated to exist in same team). Tasks with blockers auto-set to `blocked` status. |
 | `claim_task` | `task_id`, `agent_id` | Atomically claim a task. Enforces blocked_by. Respects pre-assignment — only the assigned agent or anyone if unassigned. |
-| `update_task` | `task_id`, `status`, `result?` | Mark in_progress/completed/blocked. `result` required when completing. |
+| `update_task` | `task_id`, `status`, `result?` | Mark in_progress/completed/blocked. `result` required when completing. Enforces valid state transitions only (see below). |
+| `reassign_task` | `task_id`, `reason?` | Lead-only. Resets an `in_progress` task back to `pending` with `assigned_to` cleared. For recovering stuck tasks. |
 | `list_tasks` | `team_id`, `status?`, `assigned_to?`, `limit?`, `offset?` | Paginated task list, filterable by status/assignee. Default limit 20. |
 
 ### Messaging
@@ -75,8 +76,13 @@ All tools are namespaced under the `copilot-agent-teams` server name. Agents ref
 - **No real-time push** — agents poll `get_messages`. The `postToolUse` hook nudges agents to check after completing work.
 - **Results on tasks** — when completing a task, the teammate writes a summary to `result`. The lead reads these to synthesize without needing full teammate context.
 - **Agent IDs** — validated format: `^[a-z0-9-]+$`, max 50 chars. Examples: "lead", "teammate-1", "teammate-2".
-- **Atomic claim** — `claim_task` uses a single atomic SQL UPDATE: `WHERE id = ? AND status = 'pending' AND (assigned_to IS NULL OR assigned_to = ?)`. Prevents TOCTOU races and respects pre-assignment.
-- **Dependency enforcement** — `claim_task` checks that all `blocked_by` tasks are `completed` before allowing a claim. Tasks with blockers are auto-set to `blocked` on creation; auto-unblocked (set to `pending`) when all blockers complete.
+- **Atomic claim** — `claim_task` wraps blocker checks + atomic UPDATE in a single `BEGIN IMMEDIATE` transaction. The UPDATE uses `WHERE id = ? AND status = 'pending' AND (assigned_to IS NULL OR assigned_to = ?)`. Prevents TOCTOU races between blocker check and claim.
+- **Dependency enforcement** — `claim_task` checks that all `blocked_by` tasks are `completed` before allowing a claim. Tasks with blockers are auto-set to `blocked` on creation; auto-unblocked (set to `pending`) when all blockers complete. Both check and unblock are transactional.
+- **State transitions** — `update_task` enforces a state machine: `pending→in_progress` (via claim_task only), `in_progress→completed` (requires `result`), `in_progress→blocked`, `blocked→pending` (auto-unblock only). Invalid transitions are rejected. Prevents agents from reverting completed tasks.
+- **Task recovery** — `reassign_task` (lead-only) resets `in_progress→pending` with `assigned_to` cleared, allowing stuck tasks to be re-claimed by another agent.
+- **Idempotent registration** — `register_teammate` uses `INSERT OR IGNORE` so retries after transient failures don't throw.
+- **Broadcast atomicity** — broadcast expansion (inserting per-recipient rows) is wrapped in a transaction to prevent partial delivery on crash.
+- **Recipient validation** — `send_message` validates that the target agent is a registered member of the team.
 - **Blocker validation** — `create_task` validates that all `blocked_by` task IDs exist and belong to the same team.
 - **Team existence check** — all mutating tools verify the team exists and is active. Read-only tools (`team_status`, `get_messages`) allow querying stopped teams.
 - **Zod-typed schemas** — all tool inputs are validated via Zod (e.g., `blocked_by` is `z.array(z.number())`). No raw JSON.parse in tool handlers.
@@ -144,7 +150,7 @@ Behavior:
 Uses Copilot CLI hooks.json v1 schema:
 
 - **`sessionStart`** — Node.js script checks `.copilot-teams/teams.db` for active teams. Prints reminder with team IDs and goals.
-- **`postToolUse`** — Node.js script checks if active teams exist before printing a message reminder. Silent when no teams are active (no noise for non-team workflows).
+- **`postToolUse`** — First checks if `.copilot-teams/teams.db` exists via bash `test -f` (avoids Node.js startup cost when no DB). If DB exists, Node.js script checks for active teams and prints a message reminder. Silent when no teams are active.
 
 ## SQLite Schema
 
@@ -214,5 +220,5 @@ Designed so organizations can fork and customize agent definitions, add domain-s
 - **Hybrid coordination** — team lead orchestrates, but teammates message each other directly.
 - **Shared workspace** — teammates work in the same directory. Task decomposition should minimize file conflicts. No worktree isolation (not supported by the Task tool).
 - **Polling over push** — agents check `get_messages`; `postToolUse` hook nudges them to do so.
-- **Atomic operations** — `claim_task` uses single-statement atomic UPDATE. `get_messages` uses a transaction for read-and-mark-as-read.
+- **Atomic operations** — `claim_task` wraps blocker check + UPDATE in `BEGIN IMMEDIATE` transaction. `get_messages` uses a transaction for read-and-mark-as-read. Broadcast expansion is transactional. `update_task` completion + auto-unblock is transactional.
 - **Graceful shutdown** — MCP server process handles SIGINT/SIGTERM to close the database cleanly.
