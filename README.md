@@ -5,7 +5,7 @@ Multi-agent team coordination plugin for GitHub Copilot CLI. A team lead decompo
 ## Install
 
 ```bash
-copilot plugin install mtsach/copilot-agent-teams
+copilot plugin install MatanTsach/copilot-agent-teams
 ```
 
 ## Quick Start
