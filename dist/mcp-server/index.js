@@ -32092,7 +32092,7 @@ function registerTaskTools(server2, db2) {
     "Update task status. result required when completing.",
     {
       task_id: external_exports.number(),
-      status: external_exports.enum(["completed", "blocked"]),
+      status: external_exports.enum(["completed", "blocked", "in_progress"]),
       result: external_exports.string().optional()
     },
     async ({ task_id, status, result }) => {
@@ -32101,7 +32101,7 @@ function registerTaskTools(server2, db2) {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db2.getActiveTeam(existingTask.team_id);
         const task = db2.updateTask(task_id, status, result);
-        const actionType = status === "completed" ? "task_complete" : "task_block";
+        const actionType = status === "completed" ? "task_complete" : status === "in_progress" ? "task_resume" : "task_block";
         db2.logAction(existingTask.team_id, existingTask.assigned_to ?? "lead", actionType, task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e) {

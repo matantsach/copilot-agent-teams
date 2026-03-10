@@ -143,4 +143,23 @@ describe("Task Board Tools", () => {
     const content = JSON.parse((result.content as any)[0].text);
     expect(content.status).toBe("needs_review");
   });
+
+  it("update_task with in_progress self-unblocks from blocked", async () => {
+    const team = db.createTeam("Test");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    db.updateTask(task.id, "blocked");
+    const result = await client.callTool({ name: "update_task", arguments: { task_id: task.id, status: "in_progress" } });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("in_progress");
+  });
+
+  it("update_task rejects in_progress from in_progress (no-op transition)", async () => {
+    const team = db.createTeam("Test");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+    const result = await client.callTool({ name: "update_task", arguments: { task_id: task.id, status: "in_progress" } });
+    expect(result.isError).toBe(true);
+  });
 });

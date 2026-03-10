@@ -43,7 +43,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
   server.tool("update_task", "Update task status. result required when completing.",
     {
       task_id: z.number(),
-      status: z.enum(["completed", "blocked"]),
+      status: z.enum(["completed", "blocked", "in_progress"]),
       result: z.string().optional(),
     },
     async ({ task_id, status, result }) => {
@@ -52,7 +52,7 @@ export function registerTaskTools(server: McpServer, db: TeamDB): void {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db.getActiveTeam(existingTask.team_id);
         const task = db.updateTask(task_id, status, result);
-        const actionType = status === "completed" ? "task_complete" : "task_block";
+        const actionType = status === "completed" ? "task_complete" : status === "in_progress" ? "task_resume" : "task_block";
         db.logAction(existingTask.team_id, existingTask.assigned_to ?? "lead", actionType, task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e: any) {
