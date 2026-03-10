@@ -4,14 +4,14 @@
     "sessionStart": [
       {
         "type": "command",
-        "command": "node dist/hooks/check-active-teams.js",
+        "command": "node ${COPILOT_PLUGIN_ROOT}/dist/hooks/check-active-teams.js",
         "timeoutSec": 5
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "command": "node dist/hooks/nudge-messages.js",
+        "command": "node ${COPILOT_PLUGIN_ROOT}/dist/hooks/nudge-messages.js",
         "timeoutSec": 3
       }
     ]

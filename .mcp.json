@@ -3,7 +3,7 @@
     "copilot-agent-teams": {
       "type": "stdio",
       "command": "node",
-      "args": ["dist/mcp-server/index.js"]
+      "args": ["${COPILOT_PLUGIN_ROOT}/dist/mcp-server/index.js"]
     }
   }
 }
