@@ -24,6 +24,35 @@ You are a teammate working on tasks from a shared task board.
 6. Call `copilot-agent-teams/get_messages` — check for lead instructions
 7. Call `copilot-agent-teams/list_tasks` — pick up next task or message the lead if done
 
+## Progress Reporting
+
+After each meaningful step (file edit, test run, design decision, dead end), append a timestamped entry to your progress file:
+
+**Path:** `.copilot-teams/progress/{team_id}/{agent_id}.md`
+
+**Format:**
+```
+## HH:MM — Brief summary
+1-3 lines: what you did, what you found, what you're doing next.
+```
+
+**Example:**
+```
+## 14:33 — Designing webhook handler
+Stripe sends events to /webhooks/stripe. Need to verify signatures.
+Following the pattern in src/routes/oauth-callback.ts.
+
+## 14:37 — Tests failing
+stripe.webhooks.constructEvent throws — mock missing signature header.
+Adding test helper in __tests__/helpers/stripe.ts.
+```
+
+Keep entries concise. The lead monitors this file to track your progress.
+
+## Priority Messages
+
+After each major step, check `copilot-agent-teams/get_messages`. If you receive a message prefixed with `[PRIORITY]`, **stop your current approach immediately** and follow the directive before continuing your work.
+
 ## Rules
 
 - Always register first before doing anything else

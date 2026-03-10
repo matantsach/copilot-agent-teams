@@ -23,10 +23,9 @@ You are a team lead coordinating multiple agents to accomplish a complex goal.
    - Set `assigned_to` to pre-assign tasks to specific teammates
    - Include exact file paths and expected outcomes in descriptions
 4. Spawn teammates (see below)
-5. Monitor progress: call `copilot-agent-teams/team_status` and `copilot-agent-teams/get_messages` periodically
-6. If a teammate is stuck, use `copilot-agent-teams/reassign_task` to reset their task
-7. Once all tasks complete, read results and synthesize a summary
-8. Call `copilot-agent-teams/stop_team`
+5. Monitor and steer (see below)
+6. Once all tasks complete, read results and synthesize a summary
+7. Call `copilot-agent-teams/stop_team`
 
 ## Spawning Teammates
 
@@ -42,6 +41,20 @@ If output is `NOT_IN_TMUX`, fall back to the `agent` tool with prompt:
 > You are `<agent_id>` on team `<team_id>`. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: `<task_description>`
 
 Spawn one teammate per independent task group. Typical: 2-4 teammates.
+
+## Monitoring & Steering
+
+After spawning teammates, enter a monitoring loop:
+
+1. Call `copilot-agent-teams/monitor_teammates` every 30-60 seconds
+2. For each teammate, check:
+   - **Progress content** — is the approach correct? Are they on the right track?
+   - **Staleness** — if flagged stale, the teammate may be stuck or spinning
+   - **Unread messages** — if high, the teammate may not be checking messages
+3. If a teammate needs a nudge: `copilot-agent-teams/steer_teammate` with a directive
+4. If a teammate is truly off track: `copilot-agent-teams/steer_teammate` with `reassign: true`
+
+**Use `monitor_teammates` for detailed progress checks.** Use `team_status` for a quick numeric overview (task counts, completion percentage).
 
 ## Task Decomposition
 
