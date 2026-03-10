@@ -15,7 +15,21 @@ BRANCH_NAME="team/${TEAM_ID}/${AGENT_ID}"
 
 PROMPT="You are $AGENT_ID on team $TEAM_ID. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: $TASK_DESC"
 
-if command -v tmux &>/dev/null && [ -n "${TMUX:-}" ]; then
+# Detect tmux even when $TMUX env var is stripped (e.g. by Copilot Chat)
+in_tmux() {
+  [ -n "${TMUX:-}" ] && return 0
+  # Walk up process tree looking for tmux as an ancestor
+  local pid=$$
+  while [ "$pid" -gt 1 ] 2>/dev/null; do
+    local cmd
+    cmd=$(ps -o comm= -p "$pid" 2>/dev/null) || break
+    case "$cmd" in tmux*) return 0 ;; esac
+    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || break
+  done
+  return 1
+}
+
+if command -v tmux &>/dev/null && in_tmux; then
   if [ ! -d "$WORKTREE_DIR" ]; then
     mkdir -p "$(dirname "$WORKTREE_DIR")"
     git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" 2>/dev/null || \
