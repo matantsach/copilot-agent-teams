@@ -17,5 +17,5 @@ Stop an active team and present the collected results.
    - Count of incomplete tasks (if any)
    - Overall outcome relative to the original goal
 5. Clean up worktrees:
-   - Run `bash "${COPILOT_PLUGIN_ROOT}/scripts/cleanup-worktrees.sh" <team_id>` to remove teammate worktrees
+   - Run `bash scripts/cleanup-worktrees.sh <team_id>` to remove teammate worktrees
    - Report which branches were created (users may want to review/merge them)

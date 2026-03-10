@@ -17,7 +17,7 @@ Create a team and orchestrate it from the current session.
    - Set `assigned_to` to pre-assign tasks to specific teammates
    - Include exact file paths and expected outcomes in descriptions
 5. Spawn teammates:
-   - Try tmux: `bash "${COPILOT_PLUGIN_ROOT}/scripts/spawn-teammate.sh" <team_id> <agent_id> "<task_description>" [model]`
+   - Try tmux: `bash scripts/spawn-teammate.sh <team_id> <agent_id> "<task_description>" [model]`
    - If output is `NOT_IN_TMUX`, use the `agent` tool with prompt:
      "You are <agent_id> on team <team_id>. Register, list_tasks, claim your work, complete it. Task: <description>"
 6. Run an initial `copilot-agent-teams/monitor_teammates` check to confirm teammates started

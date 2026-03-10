@@ -2,6 +2,7 @@
 # Usage: cleanup-worktrees.sh [team_id] [--force]
 # Removes git worktrees created for teammates. If team_id given, only those worktrees.
 # Without --force, skips worktrees with uncommitted changes.
+# Safe to run in non-git repos (exits cleanly if no worktrees exist).
 
 set -euo pipefail
 
@@ -24,6 +25,10 @@ if [ ! -d "$WORKTREE_BASE" ]; then
   exit 0
 fi
 
+is_git_repo() {
+  git rev-parse --is-inside-work-tree &>/dev/null
+}
+
 cleaned=0
 skipped=0
 
@@ -41,17 +46,22 @@ for team_dir in "$WORKTREE_BASE"/*/; do
     [ -d "$worktree" ] || continue
     agent_id=$(basename "$worktree")
 
-    # Check for uncommitted changes
-    if [ "$FORCE" = false ]; then
-      if ! git -C "$worktree" diff --quiet 2>/dev/null || ! git -C "$worktree" diff --cached --quiet 2>/dev/null; then
-        echo "WARNING: $agent_id (team $team_id) has uncommitted changes — skipping (use --force to override)"
-        skipped=$((skipped + 1))
-        continue
+    if is_git_repo; then
+      # Check for uncommitted changes
+      if [ "$FORCE" = false ]; then
+        if ! git -C "$worktree" diff --quiet 2>/dev/null || ! git -C "$worktree" diff --cached --quiet 2>/dev/null; then
+          echo "WARNING: $agent_id (team $team_id) has uncommitted changes — skipping (use --force to override)"
+          skipped=$((skipped + 1))
+          continue
+        fi
       fi
-    fi
 
-    git worktree remove "$worktree" --force 2>/dev/null || true
-    git branch -D "team/$team_id/$agent_id" 2>/dev/null || true
+      git worktree remove "$worktree" --force 2>/dev/null || true
+      git branch -D "team/$team_id/$agent_id" 2>/dev/null || true
+    else
+      # Non-git repo: just remove the directory
+      rm -rf "$worktree"
+    fi
     cleaned=$((cleaned + 1))
   done
 
@@ -59,8 +69,10 @@ for team_dir in "$WORKTREE_BASE"/*/; do
   rmdir "$team_dir" 2>/dev/null || true
 done
 
-# Prune any stale worktree references
-git worktree prune 2>/dev/null || true
+# Prune any stale worktree references (only in git repos)
+if is_git_repo; then
+  git worktree prune 2>/dev/null || true
+fi
 
 echo "Cleaned up $cleaned worktree(s)"
 if [ "$skipped" -gt 0 ]; then

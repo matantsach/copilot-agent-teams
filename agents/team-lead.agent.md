@@ -34,7 +34,7 @@ You are a team lead coordinating multiple agents to accomplish a complex goal.
 Try tmux first (parallel panes with isolated worktrees):
 
 ```bash
-bash "${COPILOT_PLUGIN_ROOT}/scripts/spawn-teammate.sh" <team_id> <agent_id> "<task_description>" [model]
+bash scripts/spawn-teammate.sh <team_id> <agent_id> "<task_description>" [model]
 ```
 
 Each teammate gets its own git worktree and branch (`team/<team_id>/<agent_id>`), eliminating file conflicts between concurrent agents.
