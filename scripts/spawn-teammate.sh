@@ -15,21 +15,25 @@ BRANCH_NAME="team/${TEAM_ID}/${AGENT_ID}"
 
 PROMPT="You are $AGENT_ID on team $TEAM_ID. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: $TASK_DESC"
 
-# Detect tmux even when $TMUX env var is stripped (e.g. by Copilot Chat)
-in_tmux() {
+# Detect tmux even when $TMUX env var is stripped (e.g. by Copilot Chat).
+#
+# The process-tree walk approach fails when the calling process (e.g. Copilot's
+# language server) is a daemon whose parent chain goes straight to PID 1 (launchd)
+# — tmux is a sibling process, not an ancestor.
+#
+# Instead, ask the tmux server directly via its Unix socket. This works from any
+# process on the same machine regardless of env vars or process ancestry.
+can_use_tmux() {
+  # Fast path: env var present means we're definitely in tmux
   [ -n "${TMUX:-}" ] && return 0
-  # Walk up process tree looking for tmux as an ancestor
-  local pid=$$
-  while [ "$pid" -gt 1 ] 2>/dev/null; do
-    local cmd
-    cmd=$(ps -o comm= -p "$pid" 2>/dev/null) || break
-    case "$cmd" in tmux*) return 0 ;; esac
-    pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ') || break
-  done
-  return 1
+  # Ask the tmux server if any sessions exist with attached clients.
+  # "tmux list-clients" connects via the socket (/tmp/tmux-UID/default) and
+  # succeeds even without $TMUX set. We require at least one attached client
+  # so we don't blindly split-window into a detached/invisible session.
+  tmux list-clients -F '#{client_session}' 2>/dev/null | grep -q .
 }
 
-if command -v tmux &>/dev/null && in_tmux; then
+if command -v tmux &>/dev/null && can_use_tmux; then
   if [ ! -d "$WORKTREE_DIR" ]; then
     mkdir -p "$(dirname "$WORKTREE_DIR")"
     git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" 2>/dev/null || \
