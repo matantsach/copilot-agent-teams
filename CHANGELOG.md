@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.2...copilot-agent-teams-v0.4.0) (2026-03-10)
+
+
+### Features
+
+* main session orchestrator with peer communication ([#22](https://github.com/matantsach/copilot-agent-teams/issues/22)) ([c5d3a47](https://github.com/matantsach/copilot-agent-teams/commit/c5d3a472b660005eb6b393b5405dd86ed66fdb1a))
+
 ## [0.3.2](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.1...copilot-agent-teams-v0.3.2) (2026-03-10)
 
 
