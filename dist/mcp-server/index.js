@@ -31785,7 +31785,7 @@ var TeamDB = class _TeamDB {
       }
       this.db.run(
         "INSERT INTO agent_actions (team_id, agent_id, task_id, action_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, Date.now()]
+        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, now]
       );
       this.db.exec("COMMIT");
     } catch (e) {
@@ -32305,16 +32305,17 @@ function registerMonitoringTools(server2, db2) {
     "Send a priority directive to a teammate, optionally reassigning their task",
     {
       team_id: external_exports.string(),
-      agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50),
+      caller_agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50).describe("The agent ID of the caller (must be the team lead)"),
+      target_agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50).describe("The agent ID of the teammate to steer"),
       directive: external_exports.string().max(1e4).describe("The steering message \u2014 explain what to do differently"),
       reassign: external_exports.boolean().optional().default(false).describe("If true, resets the teammate's in_progress task(s) to pending")
     },
-    async ({ team_id, agent_id, directive, reassign }) => {
+    async ({ team_id, caller_agent_id, target_agent_id, directive, reassign }) => {
       try {
         db2.getActiveTeam(team_id);
-        db2.steerTeammate(team_id, "lead", agent_id, directive, reassign);
+        db2.steerTeammate(team_id, caller_agent_id, target_agent_id, directive, reassign);
         const action = reassign ? "steered and reassigned" : "steered";
-        return { content: [{ type: "text", text: JSON.stringify({ status: action, agent_id, directive }) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ status: action, agent_id: target_agent_id, directive }) }] };
       } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };
       }

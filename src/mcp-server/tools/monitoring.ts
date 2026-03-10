@@ -106,16 +106,17 @@ export function registerMonitoringTools(server: McpServer, db: TeamDB): void {
   server.tool("steer_teammate", "Send a priority directive to a teammate, optionally reassigning their task",
     {
       team_id: z.string(),
-      agent_id: z.string().regex(/^[a-z0-9-]+$/).max(50),
+      caller_agent_id: z.string().regex(/^[a-z0-9-]+$/).max(50).describe("The agent ID of the caller (must be the team lead)"),
+      target_agent_id: z.string().regex(/^[a-z0-9-]+$/).max(50).describe("The agent ID of the teammate to steer"),
       directive: z.string().max(10000).describe("The steering message — explain what to do differently"),
       reassign: z.boolean().optional().default(false).describe("If true, resets the teammate's in_progress task(s) to pending"),
     },
-    async ({ team_id, agent_id, directive, reassign }) => {
+    async ({ team_id, caller_agent_id, target_agent_id, directive, reassign }) => {
       try {
         db.getActiveTeam(team_id);
-        db.steerTeammate(team_id, "lead", agent_id, directive, reassign);
+        db.steerTeammate(team_id, caller_agent_id, target_agent_id, directive, reassign);
         const action = reassign ? "steered and reassigned" : "steered";
-        return { content: [{ type: "text", text: JSON.stringify({ status: action, agent_id, directive }) }] };
+        return { content: [{ type: "text", text: JSON.stringify({ status: action, agent_id: target_agent_id, directive }) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };
       }

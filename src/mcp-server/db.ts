@@ -395,7 +395,7 @@ export class TeamDB {
       // Log the steering action
       this.db.run(
         "INSERT INTO agent_actions (team_id, agent_id, task_id, action_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, Date.now()]
+        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, now]
       );
 
       this.db.exec("COMMIT");

@@ -143,7 +143,7 @@ describe("Monitoring Tools", () => {
 
     const result = await client.callTool({
       name: "steer_teammate",
-      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Use approach Y instead" }
+      arguments: { team_id: team.id, caller_agent_id: "lead", target_agent_id: "teammate-1", directive: "Use approach Y instead" }
     });
     expect(result.isError).toBeFalsy();
     const content = JSON.parse((result.content as any)[0].text);
@@ -164,7 +164,7 @@ describe("Monitoring Tools", () => {
 
     const result = await client.callTool({
       name: "steer_teammate",
-      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Reassigning", reassign: true }
+      arguments: { team_id: team.id, caller_agent_id: "lead", target_agent_id: "teammate-1", directive: "Reassigning", reassign: true }
     });
     expect(result.isError).toBeFalsy();
     const content = JSON.parse((result.content as any)[0].text);
@@ -181,7 +181,7 @@ describe("Monitoring Tools", () => {
 
     await client.callTool({
       name: "steer_teammate",
-      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Fix this" }
+      arguments: { team_id: team.id, caller_agent_id: "lead", target_agent_id: "teammate-1", directive: "Fix this" }
     });
 
     const actions = db.getAuditLog(team.id, { action_type: "steer" });
@@ -192,7 +192,7 @@ describe("Monitoring Tools", () => {
   it("steer_teammate returns error for non-existent team", async () => {
     const result = await client.callTool({
       name: "steer_teammate",
-      arguments: { team_id: "nonexistent", agent_id: "teammate-1", directive: "Fix" }
+      arguments: { team_id: "nonexistent", caller_agent_id: "lead", target_agent_id: "teammate-1", directive: "Fix" }
     });
     expect(result.isError).toBe(true);
   });
