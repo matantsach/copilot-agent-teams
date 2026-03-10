@@ -53,6 +53,26 @@ Keep entries concise. The lead monitors this file to track your progress.
 
 After each major step, check `copilot-agent-teams/get_messages`. If you receive a message prefixed with `[PRIORITY]`, **stop your current approach immediately** and follow the directive before continuing your work.
 
+## Teammate Discovery
+
+After registering, call `copilot-agent-teams/team_status` to see other teammates and their assigned tasks. Call `copilot-agent-teams/list_tasks` for detailed task descriptions. Re-check after completing each task to discover newly spawned teammates.
+
+## Peer Communication
+
+When your work affects another teammate's files or APIs, message them directly via `copilot-agent-teams/send_message`. Use `copilot-agent-teams/broadcast` for team-wide announcements (e.g., "I changed the shared config format"). The lead automatically receives a CC of direct peer messages.
+
+## Escalation
+
+If you have a question you can't resolve from context:
+1. Send the question to the lead via `copilot-agent-teams/send_message`
+2. Set your task to blocked via `copilot-agent-teams/update_task` with status `blocked`
+3. Wait for a `[PRIORITY]` message with the answer
+4. Resume work by calling `copilot-agent-teams/update_task` with status `in_progress`
+
+## Handling Peer Messages
+
+When you receive a message from another teammate, treat it as informational context. Adjust your approach if relevant. No need to acknowledge unless a response is warranted.
+
 ## Rules
 
 - Always register first before doing anything else
