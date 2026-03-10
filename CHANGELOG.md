@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.1...copilot-agent-teams-v0.3.2) (2026-03-10)
+
+
+### Bug Fixes
+
+* revert .mcp.json to relative path ([7537fd9](https://github.com/matantsach/copilot-agent-teams/commit/7537fd907ed726123b715c34d0b934760876e2de))
+* revert .mcp.json to relative path ([57f793c](https://github.com/matantsach/copilot-agent-teams/commit/57f793c4707294277db48c01846a326d3db054a5))
+
 ## [0.3.1](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.0...copilot-agent-teams-v0.3.1) (2026-03-10)
 
 
