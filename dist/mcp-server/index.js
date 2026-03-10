@@ -32190,6 +32190,16 @@ function registerMessagingTools(server2, db2) {
         db2.getActiveTeam(team_id);
         const msg = db2.sendMessage(team_id, from, to, content);
         db2.logAction(team_id, from, "message_send");
+        try {
+          const members = db2.getMembers(team_id);
+          const fromMember = members.find((m) => m.agent_id === from);
+          const toMember = members.find((m) => m.agent_id === to);
+          const leadId = db2.getLeadId(team_id);
+          if (fromMember?.role === "teammate" && toMember?.role === "teammate" && leadId) {
+            db2.sendMessage(team_id, from, leadId, `[CC to ${to}]: ${content}`);
+          }
+        } catch {
+        }
         return { content: [{ type: "text", text: JSON.stringify(msg) }] };
       } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };

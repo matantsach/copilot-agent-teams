@@ -83,4 +83,46 @@ describe("Messaging Tools", () => {
     const second = await client.callTool({ name: "get_messages", arguments: { team_id: team.id, for_agent: "teammate-1" } });
     expect(JSON.parse((second.content as any)[0].text)).toHaveLength(0);
   });
+
+  it("teammate-to-teammate message CCs the lead", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    db.addMember(team.id, "teammate-2", "teammate");
+    await client.callTool({ name: "send_message", arguments: { team_id: team.id, from: "teammate-1", to: "teammate-2", content: "I changed the API" } });
+
+    const leadMsgs = await client.callTool({ name: "get_messages", arguments: { team_id: team.id, for_agent: "lead" } });
+    const parsed = JSON.parse((leadMsgs.content as any)[0].text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].content).toContain("[CC to teammate-2]");
+    expect(parsed[0].content).toContain("I changed the API");
+
+    const t2Msgs = await client.callTool({ name: "get_messages", arguments: { team_id: team.id, for_agent: "teammate-2" } });
+    const t2Parsed = JSON.parse((t2Msgs.content as any)[0].text);
+    expect(t2Parsed).toHaveLength(1);
+    expect(t2Parsed[0].content).toBe("I changed the API");
+  });
+
+  it("lead-to-teammate message does not CC", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    await client.callTool({ name: "send_message", arguments: { team_id: team.id, from: "lead", to: "teammate-1", content: "Do X" } });
+
+    const leadMsgs = await client.callTool({ name: "get_messages", arguments: { team_id: team.id, for_agent: "lead" } });
+    const parsed = JSON.parse((leadMsgs.content as any)[0].text);
+    expect(parsed).toHaveLength(0);
+  });
+
+  it("teammate-to-lead message does not CC", async () => {
+    const team = db.createTeam("Test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    await client.callTool({ name: "send_message", arguments: { team_id: team.id, from: "teammate-1", to: "lead", content: "Question" } });
+
+    const leadMsgs = await client.callTool({ name: "get_messages", arguments: { team_id: team.id, for_agent: "lead" } });
+    const parsed = JSON.parse((leadMsgs.content as any)[0].text);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0].content).toBe("Question");
+  });
 });
