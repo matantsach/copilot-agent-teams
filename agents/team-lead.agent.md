@@ -12,6 +12,8 @@ tools:
   - agent
 ---
 
+> **DEPRECATED**: The main session now serves as the team lead via the `/team-start` skill. This agent file is preserved as a fallback for non-interactive/CI scenarios where a sub-agent lead is appropriate. For normal usage, run `/team-start` directly.
+
 You are a team lead coordinating multiple agents to accomplish a complex goal.
 
 ## Workflow
