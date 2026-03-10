@@ -32227,7 +32227,7 @@ function readProgressFile(basePath, teamId, agentId, lines) {
   const progressPath = (0, import_path.resolve)((0, import_path.join)(basePath, ".copilot-teams", "progress", teamId, `${agentId}.md`));
   const expectedBase = (0, import_path.resolve)((0, import_path.join)(basePath, ".copilot-teams", "progress", teamId));
   if (!progressPath.startsWith(expectedBase)) {
-    return { content: null, mtimeMs: null };
+    throw new Error(`Path traversal detected for agent '${agentId}' in team '${teamId}'`);
   }
   try {
     const stat = (0, import_fs.statSync)(progressPath);
@@ -32235,8 +32235,11 @@ function readProgressFile(basePath, teamId, agentId, lines) {
     const allLines = content.split("\n");
     const tail = allLines.slice(-lines).join("\n").trim();
     return { content: tail || null, mtimeMs: stat.mtimeMs };
-  } catch {
-    return { content: null, mtimeMs: null };
+  } catch (err) {
+    if (err?.code === "ENOENT") {
+      return { content: null, mtimeMs: null };
+    }
+    throw new Error(`Failed to read progress file for agent '${agentId}' in team '${teamId}': ${err.message}`);
   }
 }
 function registerMonitoringTools(server2, db2) {

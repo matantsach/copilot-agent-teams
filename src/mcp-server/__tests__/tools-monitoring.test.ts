@@ -196,4 +196,27 @@ describe("Monitoring Tools", () => {
     });
     expect(result.isError).toBe(true);
   });
+
+  it("monitor_teammates returns error for non-existent team", async () => {
+    const result = await client.callTool({
+      name: "monitor_teammates",
+      arguments: { team_id: "nonexistent" }
+    });
+    expect(result.isError).toBe(true);
+  });
+
+  it("monitor_teammates handles idle teammate with no current task", async () => {
+    const team = db.createTeam("idle test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate", tmpDir);
+
+    const result = await client.callTool({
+      name: "monitor_teammates",
+      arguments: { team_id: team.id }
+    });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content[0].current_task).toBeNull();
+    expect(content[0].progress).toBeNull();
+  });
 });

@@ -474,5 +474,42 @@ describe("TeamDB", () => {
       const msgs = db.getMessages(team.id, "teammate-1");
       expect(msgs).toHaveLength(0);
     });
+
+    it("steerTeammate rejects steering a non-member agent", () => {
+      const team = db.createTeam("steer non-member test");
+      db.addMember(team.id, "lead", "lead");
+
+      expect(() => db.steerTeammate(team.id, "lead", "ghost", "Do X")).toThrow("not a member");
+    });
+
+    it("steerTeammate with reassign resets all in_progress tasks", () => {
+      const team = db.createTeam("steer multi-task test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task1 = db.createTask(team.id, "Task 1");
+      const task2 = db.createTask(team.id, "Task 2");
+      db.claimTask(task1.id, "teammate-1");
+      db.claimTask(task2.id, "teammate-1");
+
+      db.steerTeammate(team.id, "lead", "teammate-1", "Reassigning all", true);
+
+      expect(db.getTask(task1.id)!.status).toBe("pending");
+      expect(db.getTask(task1.id)!.assigned_to).toBeNull();
+      expect(db.getTask(task2.id)!.status).toBe("pending");
+      expect(db.getTask(task2.id)!.assigned_to).toBeNull();
+    });
+
+    it("steerTeammate without reassign preserves task state", () => {
+      const team = db.createTeam("steer preserve test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+
+      db.steerTeammate(team.id, "lead", "teammate-1", "Try a different approach");
+
+      expect(db.getTask(task.id)!.status).toBe("in_progress");
+      expect(db.getTask(task.id)!.assigned_to).toBe("teammate-1");
+    });
   });
 });

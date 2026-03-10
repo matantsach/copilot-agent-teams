@@ -20,9 +20,9 @@ function readProgressFile(basePath: string | null, teamId: string, agentId: stri
   const progressPath = resolve(join(basePath, ".copilot-teams", "progress", teamId, `${agentId}.md`));
   const expectedBase = resolve(join(basePath, ".copilot-teams", "progress", teamId));
 
-  // Path boundary check
+  // Path boundary check — security: detect traversal attempts
   if (!progressPath.startsWith(expectedBase)) {
-    return { content: null, mtimeMs: null };
+    throw new Error(`Path traversal detected for agent '${agentId}' in team '${teamId}'`);
   }
 
   try {
@@ -31,8 +31,11 @@ function readProgressFile(basePath: string | null, teamId: string, agentId: stri
     const allLines = content.split("\n");
     const tail = allLines.slice(-lines).join("\n").trim();
     return { content: tail || null, mtimeMs: stat.mtimeMs };
-  } catch {
-    return { content: null, mtimeMs: null };
+  } catch (err: any) {
+    if (err?.code === "ENOENT") {
+      return { content: null, mtimeMs: null };
+    }
+    throw new Error(`Failed to read progress file for agent '${agentId}' in team '${teamId}': ${err.message}`);
   }
 }
 
