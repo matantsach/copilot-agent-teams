@@ -339,6 +339,15 @@ describe("TeamDB", () => {
       expect(c.needs_review).toBe(1);
       expect(c.total).toBe(1);
     });
+
+    it("allows blocked → in_progress transition (self-unblock after escalation)", () => {
+      const team = db.createTeam("Test");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "blocked");
+      const resumed = db.updateTask(task.id, "in_progress");
+      expect(resumed.status).toBe("in_progress");
+    });
   });
 
   describe("messages", () => {

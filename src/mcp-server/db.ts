@@ -231,7 +231,7 @@ export class TeamDB {
   // Valid state transitions (claim_task handles pending→in_progress)
   private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
     in_progress: ["completed", "blocked", "needs_review"],
-    blocked: ["pending"], // auto-unblock only, not direct
+    blocked: ["pending", "in_progress"], // auto-unblock or self-unblock after escalation
     needs_review: ["completed", "in_progress"], // approve or reject
   };
 
