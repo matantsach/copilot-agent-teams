@@ -47,13 +47,13 @@ if command -v tmux &>/dev/null && can_use_tmux; then
       mkdir -p "$(dirname "$WORKTREE_DIR")"
       if git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" 2>/dev/null || \
          git worktree add "$WORKTREE_DIR" "$BRANCH_NAME" 2>/dev/null; then
-        WORK_DIR="$WORKTREE_DIR"
+        WORK_DIR="$(cd "$WORKTREE_DIR" && pwd)"
         WORKTREE_INFO=" with worktree (branch: $BRANCH_NAME)"
       else
         echo "WARNING: worktree creation failed — teammates will share the working directory" >&2
       fi
     else
-      WORK_DIR="$WORKTREE_DIR"
+      WORK_DIR="$(cd "$WORKTREE_DIR" && pwd)"
       WORKTREE_INFO=" with worktree (branch: $BRANCH_NAME)"
     fi
   fi
@@ -69,9 +69,9 @@ if command -v tmux &>/dev/null && can_use_tmux; then
   #
   # The trailing "read" keeps the pane open if copilot exits (crash, not found, etc.)
   # so the user can see what went wrong instead of a brief flash.
-  SHELL_CMD="${SHELL:-/bin/sh}"
+  SHELL_CMD="${SHELL:-/bin/bash}"
   tmux split-window -h -c "$WORK_DIR" \
-    "$SHELL_CMD -lc 'TEAMMATE_PROMPT=\$(cat \"$PROMPT_FILE\") copilot -a teammate -m \"$MODEL\" \"\$TEAMMATE_PROMPT\"; echo \"[pane exited — press any key to close]\"; read -n1; rm -f \"$PROMPT_FILE\"'"
+    "$SHELL_CMD -lc 'trap \"rm -f $PROMPT_FILE\" EXIT; TEAMMATE_PROMPT=\$(cat \"$PROMPT_FILE\"); copilot -a teammate -m \"$MODEL\" \"\$TEAMMATE_PROMPT\"; echo \"[pane exited — press any key to close]\"; read -n1'"
   tmux select-layout tiled
   echo "WORK_DIR=$WORK_DIR"
   echo "Spawned $AGENT_ID in tmux pane${WORKTREE_INFO} (model: $MODEL)"
