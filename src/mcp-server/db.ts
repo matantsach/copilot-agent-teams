@@ -130,6 +130,14 @@ export class TeamDB {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as unknown as Member[];
   }
 
+  getLeadId(teamId: string): string | null {
+    const row = this.db.get(
+      "SELECT agent_id FROM members WHERE team_id = ? AND role = ?",
+      [teamId, "lead"]
+    ) as { agent_id: string } | undefined;
+    return row?.agent_id ?? null;
+  }
+
   updateMemberWorktree(teamId: string, agentId: string, worktreePath: string): void {
     const result = this.db.run(
       "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",

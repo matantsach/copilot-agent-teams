@@ -31571,6 +31571,13 @@ var TeamDB = class _TeamDB {
   getMembers(teamId) {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]);
   }
+  getLeadId(teamId) {
+    const row = this.db.get(
+      "SELECT agent_id FROM members WHERE team_id = ? AND role = ?",
+      [teamId, "lead"]
+    );
+    return row?.agent_id ?? null;
+  }
   updateMemberWorktree(teamId, agentId, worktreePath) {
     const result = this.db.run(
       "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",

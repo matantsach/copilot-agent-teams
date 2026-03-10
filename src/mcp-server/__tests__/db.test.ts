@@ -95,6 +95,19 @@ describe("TeamDB", () => {
       expect(worktrees).toHaveLength(1);
       expect(worktrees[0].agent_id).toBe("teammate-1");
     });
+
+    it("getLeadId returns the lead agent_id", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      expect(db.getLeadId(team.id)).toBe("lead");
+    });
+
+    it("getLeadId returns null when no lead exists", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "teammate-1", "teammate");
+      expect(db.getLeadId(team.id)).toBeNull();
+    });
   });
 
   describe("tasks", () => {
