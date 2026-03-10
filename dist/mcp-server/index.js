@@ -2980,7 +2980,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve.call(this, root, ref);
+      let _sch = resolve2.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a2 = root.localRefs) === null || _a2 === void 0 ? void 0 : _a2[ref];
         const { schemaId } = this.opts;
@@ -3007,7 +3007,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve(root, ref) {
+    function resolve2(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3582,7 +3582,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve(baseURI, relativeURI, options) {
+    function resolve2(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3809,7 +3809,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize,
-      resolve,
+      resolve: resolve2,
       resolveComponent,
       equal,
       serialize,
@@ -7396,9 +7396,9 @@ var require_node_sqlite3_wasm = __commonJS({
       }
       var info = getWasmImports();
       if (Module["instantiateWasm"]) {
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve2, reject) => {
           Module["instantiateWasm"](info, (inst, mod) => {
-            resolve(receiveInstance(inst, mod));
+            resolve2(receiveInstance(inst, mod));
           });
         });
       }
@@ -23529,12 +23529,12 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve) => {
+    return new Promise((resolve2) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve();
+        resolve2();
       } else {
-        this._stdout.once("drain", resolve);
+        this._stdout.once("drain", resolve2);
       }
     });
   }
@@ -29429,7 +29429,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve) => setTimeout(resolve, pollInterval));
+        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error48) {
@@ -29446,7 +29446,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       const earlyReject = (error48) => {
         reject(error48);
       };
@@ -29524,7 +29524,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve(parseResult.data);
+            resolve2(parseResult.data);
           }
         } catch (error48) {
           reject(error48);
@@ -29785,12 +29785,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve2, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve, interval);
+      const timeoutId = setTimeout(resolve2, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -30890,7 +30890,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve) => setTimeout(resolve, pollInterval));
+      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -31752,6 +31752,47 @@ var TeamDB = class _TeamDB {
     }
     return this.getTask(id);
   }
+  steerTeammate(teamId, callerAgentId, targetAgentId, directive, reassign) {
+    const members = this.getMembers(teamId);
+    const caller = members.find((m) => m.agent_id === callerAgentId);
+    if (!caller || caller.role !== "lead") {
+      throw new Error("Only the team lead can steer teammates");
+    }
+    if (!members.find((m) => m.agent_id === targetAgentId)) {
+      throw new Error(`Agent '${targetAgentId}' is not a member of team '${teamId}'`);
+    }
+    this.db.exec("BEGIN IMMEDIATE");
+    try {
+      const now = Date.now();
+      this.db.run(
+        "INSERT INTO messages (team_id, from_agent, to_agent, content, created_at) VALUES (?, ?, ?, ?, ?)",
+        [teamId, callerAgentId, targetAgentId, `[PRIORITY] ${directive}`, now]
+      );
+      if (reassign) {
+        const tasks = this.db.all(
+          "SELECT id FROM tasks WHERE team_id = ? AND assigned_to = ? AND status = 'in_progress'",
+          [teamId, targetAgentId]
+        );
+        if (tasks.length === 0) {
+          throw new Error(`No in_progress task found for '${targetAgentId}' to reassign`);
+        }
+        for (const task of tasks) {
+          this.db.run(
+            "UPDATE tasks SET status = 'pending', assigned_to = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?",
+            [now, task.id]
+          );
+        }
+      }
+      this.db.run(
+        "INSERT INTO agent_actions (team_id, agent_id, task_id, action_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        [teamId, callerAgentId, null, "steer", `Steered ${targetAgentId}: ${directive}`, Date.now()]
+      );
+      this.db.exec("COMMIT");
+    } catch (e) {
+      this.db.exec("ROLLBACK");
+      throw e;
+    }
+  }
   countTasks(teamId) {
     const rows = this.db.all(
       "SELECT status, COUNT(*) as count FROM tasks WHERE team_id = ? GROUP BY status",
@@ -31839,6 +31880,13 @@ var TeamDB = class _TeamDB {
       this.db.exec("ROLLBACK");
       throw e;
     }
+  }
+  countUnread(teamId, agentId) {
+    const row = this.db.get(
+      "SELECT COUNT(*) as count FROM messages WHERE team_id = ? AND to_agent = ? AND read = 0",
+      [teamId, agentId]
+    );
+    return row?.count ?? 0;
   }
   // --- Audit Log ---
   logAction(teamId, agentId, actionType, taskId, detail) {
@@ -32171,6 +32219,109 @@ function registerMessagingTools(server2, db2) {
   );
 }
 
+// src/mcp-server/tools/monitoring.ts
+var import_fs = require("fs");
+var import_path = require("path");
+function readProgressFile(basePath, teamId, agentId, lines) {
+  if (!basePath) return { content: null, mtimeMs: null };
+  const progressPath = (0, import_path.resolve)((0, import_path.join)(basePath, ".copilot-teams", "progress", teamId, `${agentId}.md`));
+  const expectedBase = (0, import_path.resolve)((0, import_path.join)(basePath, ".copilot-teams", "progress", teamId));
+  if (!progressPath.startsWith(expectedBase)) {
+    return { content: null, mtimeMs: null };
+  }
+  try {
+    const stat = (0, import_fs.statSync)(progressPath);
+    const content = (0, import_fs.readFileSync)(progressPath, "utf-8");
+    const allLines = content.split("\n");
+    const tail = allLines.slice(-lines).join("\n").trim();
+    return { content: tail || null, mtimeMs: stat.mtimeMs };
+  } catch {
+    return { content: null, mtimeMs: null };
+  }
+}
+function registerMonitoringTools(server2, db2) {
+  server2.tool(
+    "monitor_teammates",
+    "Monitor all teammates \u2014 shows progress, task state, staleness, and unread messages",
+    {
+      team_id: external_exports.string(),
+      stale_threshold_seconds: external_exports.number().int().nonnegative().optional().default(120),
+      progress_lines: external_exports.number().int().positive().optional().default(20)
+    },
+    async ({ team_id, stale_threshold_seconds, progress_lines }) => {
+      try {
+        db2.getActiveTeam(team_id);
+        const members = db2.getMembers(team_id);
+        const teammates = members.filter((m) => m.role === "teammate");
+        const lastActivity = db2.getLastActivity(team_id);
+        const tasksWithDuration = db2.getTasksWithDuration(team_id);
+        const now = Date.now();
+        const thresholdMs = stale_threshold_seconds * 1e3;
+        const results = [];
+        for (const teammate of teammates) {
+          const currentTask = tasksWithDuration.find(
+            (t) => t.assigned_to === teammate.agent_id && t.status === "in_progress"
+          );
+          const { content, mtimeMs } = readProgressFile(
+            teammate.worktree_path,
+            team_id,
+            teammate.agent_id,
+            progress_lines
+          );
+          let stale = false;
+          let staleSeconds = null;
+          if (mtimeMs !== null) {
+            const elapsed = now - mtimeMs;
+            stale = elapsed > thresholdMs;
+            staleSeconds = Math.round(elapsed / 1e3);
+          } else if (currentTask?.claimed_at) {
+            const elapsed = now - currentTask.claimed_at;
+            stale = elapsed > thresholdMs;
+            staleSeconds = Math.round(elapsed / 1e3);
+          }
+          results.push({
+            agent_id: teammate.agent_id,
+            current_task: currentTask ? {
+              id: currentTask.id,
+              subject: currentTask.subject,
+              status: currentTask.status,
+              elapsed_ms: currentTask.duration_ms ?? 0
+            } : null,
+            progress: content,
+            stale,
+            stale_seconds: staleSeconds,
+            last_activity: lastActivity[teammate.agent_id] ?? null,
+            unread_messages: db2.countUnread(team_id, teammate.agent_id)
+          });
+        }
+        return { content: [{ type: "text", text: JSON.stringify(results) }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+  server2.tool(
+    "steer_teammate",
+    "Send a priority directive to a teammate, optionally reassigning their task",
+    {
+      team_id: external_exports.string(),
+      agent_id: external_exports.string().regex(/^[a-z0-9-]+$/).max(50),
+      directive: external_exports.string().max(1e4).describe("The steering message \u2014 explain what to do differently"),
+      reassign: external_exports.boolean().optional().default(false).describe("If true, resets the teammate's in_progress task(s) to pending")
+    },
+    async ({ team_id, agent_id, directive, reassign }) => {
+      try {
+        db2.getActiveTeam(team_id);
+        db2.steerTeammate(team_id, "lead", agent_id, directive, reassign);
+        const action = reassign ? "steered and reassigned" : "steered";
+        return { content: [{ type: "text", text: JSON.stringify({ status: action, agent_id, directive }) }] };
+      } catch (e) {
+        return { content: [{ type: "text", text: e.message }], isError: true };
+      }
+    }
+  );
+}
+
 // src/mcp-server/server.ts
 function createServer(dbPath) {
   const server2 = new McpServer({ name: "copilot-agent-teams", version: "0.1.0" });
@@ -32178,15 +32329,16 @@ function createServer(dbPath) {
   registerTeamTools(server2, db2);
   registerTaskTools(server2, db2);
   registerMessagingTools(server2, db2);
+  registerMonitoringTools(server2, db2);
   return { server: server2, db: db2 };
 }
 
 // src/mcp-server/index.ts
-var import_fs = require("fs");
-var import_path = require("path");
-var dbDir = (0, import_path.join)(process.cwd(), ".copilot-teams");
-(0, import_fs.mkdirSync)(dbDir, { recursive: true });
-var { server, db } = createServer((0, import_path.join)(dbDir, "teams.db"));
+var import_fs2 = require("fs");
+var import_path2 = require("path");
+var dbDir = (0, import_path2.join)(process.cwd(), ".copilot-teams");
+(0, import_fs2.mkdirSync)(dbDir, { recursive: true });
+var { server, db } = createServer((0, import_path2.join)(dbDir, "teams.db"));
 function shutdown() {
   try {
     db.close();
