@@ -133,4 +133,67 @@ describe("Monitoring Tools", () => {
     const content = JSON.parse((result.content as any)[0].text);
     expect(content[0].progress).toBeNull();
   });
+
+  it("steer_teammate sends priority directive", async () => {
+    const team = db.createTeam("steer tool test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+
+    const result = await client.callTool({
+      name: "steer_teammate",
+      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Use approach Y instead" }
+    });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("steered");
+
+    // Verify message was sent
+    const msgs = db.getMessages(team.id, "teammate-1");
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toBe("[PRIORITY] Use approach Y instead");
+  });
+
+  it("steer_teammate with reassign resets task", async () => {
+    const team = db.createTeam("steer reassign tool test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+    const task = db.createTask(team.id, "Do thing");
+    db.claimTask(task.id, "teammate-1");
+
+    const result = await client.callTool({
+      name: "steer_teammate",
+      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Reassigning", reassign: true }
+    });
+    expect(result.isError).toBeFalsy();
+    const content = JSON.parse((result.content as any)[0].text);
+    expect(content.status).toBe("steered and reassigned");
+
+    const updated = db.getTask(task.id);
+    expect(updated!.status).toBe("pending");
+  });
+
+  it("steer_teammate logs audit action", async () => {
+    const team = db.createTeam("steer audit test");
+    db.addMember(team.id, "lead", "lead");
+    db.addMember(team.id, "teammate-1", "teammate");
+
+    await client.callTool({
+      name: "steer_teammate",
+      arguments: { team_id: team.id, agent_id: "teammate-1", directive: "Fix this" }
+    });
+
+    const actions = db.getAuditLog(team.id, { action_type: "steer" });
+    expect(actions).toHaveLength(1);
+    expect(actions[0].detail).toContain("teammate-1");
+  });
+
+  it("steer_teammate returns error for non-existent team", async () => {
+    const result = await client.callTool({
+      name: "steer_teammate",
+      arguments: { team_id: "nonexistent", agent_id: "teammate-1", directive: "Fix" }
+    });
+    expect(result.isError).toBe(true);
+  });
 });
