@@ -58,8 +58,20 @@ if command -v tmux &>/dev/null && can_use_tmux; then
     fi
   fi
 
-  TEAMMATE_PROMPT="$PROMPT" tmux split-window -h -c "$WORK_DIR" -e "TEAMMATE_PROMPT=$PROMPT" \
-    "copilot -a teammate -m '$MODEL' \"\$TEAMMATE_PROMPT\""
+  # Write the prompt to a temp file to avoid quoting issues with special chars
+  # in task descriptions (quotes, backticks, etc.) passed through tmux → shell.
+  PROMPT_FILE="$(mktemp)"
+  echo "$PROMPT" > "$PROMPT_FILE"
+
+  # Use a login shell (-l) so PATH includes tools installed via nvm, npm global,
+  # homebrew, etc. that are set up in ~/.bashrc / ~/.zshrc. Without -l, "copilot"
+  # may not be found — causing the pane to flash and close instantly.
+  #
+  # The trailing "read" keeps the pane open if copilot exits (crash, not found, etc.)
+  # so the user can see what went wrong instead of a brief flash.
+  SHELL_CMD="${SHELL:-/bin/sh}"
+  tmux split-window -h -c "$WORK_DIR" \
+    "$SHELL_CMD -lc 'TEAMMATE_PROMPT=\$(cat \"$PROMPT_FILE\") copilot -a teammate -m \"$MODEL\" \"\$TEAMMATE_PROMPT\"; echo \"[pane exited — press any key to close]\"; read -n1; rm -f \"$PROMPT_FILE\"'"
   tmux select-layout tiled
   echo "WORK_DIR=$WORK_DIR"
   echo "Spawned $AGENT_ID in tmux pane${WORKTREE_INFO} (model: $MODEL)"
