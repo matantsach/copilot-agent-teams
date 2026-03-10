@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.0...copilot-agent-teams-v0.3.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* use ${COPILOT_PLUGIN_ROOT} for all script and binary paths ([e2f3225](https://github.com/matantsach/copilot-agent-teams/commit/e2f3225d9092f9d3d49d7374a3a9bf854d3889c1))
+* use ${COPILOT_PLUGIN_ROOT} for all script and binary paths ([88c2738](https://github.com/matantsach/copilot-agent-teams/commit/88c2738036d17dacfa3d9ace32e68019e8ed530c))
+
 ## [0.3.0](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.2.1...copilot-agent-teams-v0.3.0) (2026-03-10)
 
 
