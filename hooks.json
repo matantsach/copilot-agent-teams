@@ -5,7 +5,6 @@
       {
         "type": "command",
         "command": "node dist/hooks/check-active-teams.js",
-        "bash": "node dist/hooks/check-active-teams.js",
         "timeoutSec": 5
       }
     ],
@@ -13,7 +12,6 @@
       {
         "type": "command",
         "command": "node dist/hooks/nudge-messages.js",
-        "bash": "test -f .copilot-teams/teams.db && node dist/hooks/nudge-messages.js",
         "timeoutSec": 3
       }
     ]
