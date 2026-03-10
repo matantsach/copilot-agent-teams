@@ -1396,11 +1396,34 @@ var dbPath = ".copilot-teams/teams.db";
 if ((0, import_fs.existsSync)(dbPath)) {
   try {
     const db = new import_node_sqlite3_wasm.Database(dbPath);
-    const row = db.get("SELECT COUNT(*) as count FROM teams WHERE status = 'active'");
-    db.close();
-    if (row && row.count > 0) {
-      console.log("Reminder: check copilot-agent-teams/get_messages for team messages.");
+    const teams = db.all("SELECT id FROM teams WHERE status = 'active'");
+    for (const team of teams) {
+      const parts = [];
+      const leadRow = db.get(
+        "SELECT agent_id FROM members WHERE team_id = ? AND role = 'lead'",
+        [team.id]
+      );
+      if (leadRow) {
+        const unreadRow = db.get(
+          "SELECT COUNT(*) as count FROM messages WHERE team_id = ? AND to_agent = ? AND read = 0",
+          [team.id, leadRow.agent_id]
+        );
+        if (unreadRow.count > 0) {
+          parts.push(`${unreadRow.count} unread message${unreadRow.count > 1 ? "s" : ""}`);
+        }
+      }
+      const blockedRow = db.get(
+        "SELECT COUNT(*) as count FROM tasks WHERE team_id = ? AND status = 'blocked' AND (blocked_by IS NULL OR blocked_by = '[]')",
+        [team.id]
+      );
+      if (blockedRow.count > 0) {
+        parts.push(`${blockedRow.count} blocked task${blockedRow.count > 1 ? "s" : ""} needing input`);
+      }
+      if (parts.length > 0) {
+        console.log(`[agent-teams] Team ${team.id}: ${parts.join(", ")} \u2014 use monitor_teammates for details`);
+      }
     }
+    db.close();
   } catch (e) {
     console.error(e);
   }

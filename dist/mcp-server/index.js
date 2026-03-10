@@ -31571,6 +31571,13 @@ var TeamDB = class _TeamDB {
   getMembers(teamId) {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]);
   }
+  getLeadId(teamId) {
+    const row = this.db.get(
+      "SELECT agent_id FROM members WHERE team_id = ? AND role = ?",
+      [teamId, "lead"]
+    );
+    return row?.agent_id ?? null;
+  }
   updateMemberWorktree(teamId, agentId, worktreePath) {
     const result = this.db.run(
       "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",
@@ -31658,8 +31665,8 @@ var TeamDB = class _TeamDB {
   // Valid state transitions (claim_task handles pending→in_progress)
   static VALID_TRANSITIONS = {
     in_progress: ["completed", "blocked", "needs_review"],
-    blocked: ["pending"],
-    // auto-unblock only, not direct
+    blocked: ["pending", "in_progress"],
+    // auto-unblock or self-unblock after escalation
     needs_review: ["completed", "in_progress"]
     // approve or reject
   };
@@ -31685,6 +31692,8 @@ var TeamDB = class _TeamDB {
       const now = Date.now();
       if (effectiveStatus === "completed") {
         this.db.run("UPDATE tasks SET status = ?, result = ?, completed_at = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, now, id]);
+      } else if (effectiveStatus === "blocked" && task.status === "in_progress") {
+        this.db.run("UPDATE tasks SET status = ?, result = ?, blocked_by = NULL, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       } else {
         this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       }
@@ -32083,7 +32092,7 @@ function registerTaskTools(server2, db2) {
     "Update task status. result required when completing.",
     {
       task_id: external_exports.number(),
-      status: external_exports.enum(["completed", "blocked"]),
+      status: external_exports.enum(["completed", "blocked", "in_progress"]),
       result: external_exports.string().optional()
     },
     async ({ task_id, status, result }) => {
@@ -32092,7 +32101,7 @@ function registerTaskTools(server2, db2) {
         if (!existingTask) throw new Error(`Task ${task_id} not found`);
         db2.getActiveTeam(existingTask.team_id);
         const task = db2.updateTask(task_id, status, result);
-        const actionType = status === "completed" ? "task_complete" : "task_block";
+        const actionType = status === "completed" ? "task_complete" : status === "in_progress" ? "task_resume" : "task_block";
         db2.logAction(existingTask.team_id, existingTask.assigned_to ?? "lead", actionType, task.id);
         return { content: [{ type: "text", text: JSON.stringify(task) }] };
       } catch (e) {
@@ -32181,6 +32190,16 @@ function registerMessagingTools(server2, db2) {
         db2.getActiveTeam(team_id);
         const msg = db2.sendMessage(team_id, from, to, content);
         db2.logAction(team_id, from, "message_send");
+        try {
+          const members = db2.getMembers(team_id);
+          const fromMember = members.find((m) => m.agent_id === from);
+          const toMember = members.find((m) => m.agent_id === to);
+          const leadId = db2.getLeadId(team_id);
+          if (fromMember?.role === "teammate" && toMember?.role === "teammate" && leadId) {
+            db2.sendMessage(team_id, from, leadId, `[CC to ${to}]: ${content}`);
+          }
+        } catch {
+        }
         return { content: [{ type: "text", text: JSON.stringify(msg) }] };
       } catch (e) {
         return { content: [{ type: "text", text: e.message }], isError: true };

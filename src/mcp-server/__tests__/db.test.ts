@@ -95,6 +95,19 @@ describe("TeamDB", () => {
       expect(worktrees).toHaveLength(1);
       expect(worktrees[0].agent_id).toBe("teammate-1");
     });
+
+    it("getLeadId returns the lead agent_id", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      expect(db.getLeadId(team.id)).toBe("lead");
+    });
+
+    it("getLeadId returns null when no lead exists", () => {
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "teammate-1", "teammate");
+      expect(db.getLeadId(team.id)).toBeNull();
+    });
   });
 
   describe("tasks", () => {
@@ -338,6 +351,27 @@ describe("TeamDB", () => {
       const c = db.countTasks(team.id);
       expect(c.needs_review).toBe(1);
       expect(c.total).toBe(1);
+    });
+
+    it("allows blocked → in_progress transition (self-unblock after escalation)", () => {
+      const team = db.createTeam("Test");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "blocked");
+      const resumed = db.updateTask(task.id, "in_progress");
+      expect(resumed.status).toBe("in_progress");
+    });
+
+    it("clears blocked_by when transitioning in_progress → blocked (escalation)", () => {
+      const team = db.createTeam("Test");
+      const t1 = db.createTask(team.id, "Setup DB");
+      const t2 = db.createTask(team.id, "Build API", undefined, undefined, [t1.id]);
+      db.claimTask(t1.id, "teammate-1");
+      db.updateTask(t1.id, "completed", "Done");
+      db.claimTask(t2.id, "teammate-2");
+      db.updateTask(t2.id, "blocked");
+      const blocked = db.getTask(t2.id)!;
+      expect(blocked.blocked_by).toBeNull();
     });
   });
 

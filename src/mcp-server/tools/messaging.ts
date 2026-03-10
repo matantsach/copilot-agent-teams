@@ -11,6 +11,18 @@ export function registerMessagingTools(server: McpServer, db: TeamDB): void {
         db.getActiveTeam(team_id);
         const msg = db.sendMessage(team_id, from, to, content);
         db.logAction(team_id, from, "message_send");
+
+        // CC lead on teammate-to-teammate messages (best-effort)
+        try {
+          const members = db.getMembers(team_id);
+          const fromMember = members.find(m => m.agent_id === from);
+          const toMember = members.find(m => m.agent_id === to);
+          const leadId = db.getLeadId(team_id);
+          if (fromMember?.role === "teammate" && toMember?.role === "teammate" && leadId) {
+            db.sendMessage(team_id, from, leadId, `[CC to ${to}]: ${content}`);
+          }
+        } catch { /* CC is best-effort — original message already delivered */ }
+
         return { content: [{ type: "text", text: JSON.stringify(msg) }] };
       } catch (e: any) {
         return { content: [{ type: "text", text: e.message }], isError: true };

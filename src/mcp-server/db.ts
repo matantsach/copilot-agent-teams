@@ -130,6 +130,14 @@ export class TeamDB {
     return this.db.all("SELECT * FROM members WHERE team_id = ?", [teamId]) as unknown as Member[];
   }
 
+  getLeadId(teamId: string): string | null {
+    const row = this.db.get(
+      "SELECT agent_id FROM members WHERE team_id = ? AND role = ?",
+      [teamId, "lead"]
+    ) as { agent_id: string } | undefined;
+    return row?.agent_id ?? null;
+  }
+
   updateMemberWorktree(teamId: string, agentId: string, worktreePath: string): void {
     const result = this.db.run(
       "UPDATE members SET worktree_path = ? WHERE team_id = ? AND agent_id = ?",
@@ -231,7 +239,7 @@ export class TeamDB {
   // Valid state transitions (claim_task handles pending→in_progress)
   private static readonly VALID_TRANSITIONS: Record<string, string[]> = {
     in_progress: ["completed", "blocked", "needs_review"],
-    blocked: ["pending"], // auto-unblock only, not direct
+    blocked: ["pending", "in_progress"], // auto-unblock or self-unblock after escalation
     needs_review: ["completed", "in_progress"], // approve or reject
   };
 
@@ -263,6 +271,9 @@ export class TeamDB {
       const now = Date.now();
       if (effectiveStatus === "completed") {
         this.db.run("UPDATE tasks SET status = ?, result = ?, completed_at = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, now, id]);
+      } else if (effectiveStatus === "blocked" && task.status === "in_progress") {
+        // Escalation block: clear blocked_by so hook detects this as escalation, not dependency wait
+        this.db.run("UPDATE tasks SET status = ?, result = ?, blocked_by = NULL, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       } else {
         this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       }
