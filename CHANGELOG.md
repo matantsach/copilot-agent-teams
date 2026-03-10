@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.4.0...copilot-agent-teams-v0.4.1) (2026-03-10)
+
+
+### Bug Fixes
+
+* remove COPILOT_PLUGIN_ROOT and make worktrees optional ([#24](https://github.com/matantsach/copilot-agent-teams/issues/24)) ([015a099](https://github.com/matantsach/copilot-agent-teams/commit/015a099608fe190e5399f7aca20dc37a59daf05f))
+
 ## [0.4.0](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.3.2...copilot-agent-teams-v0.4.0) (2026-03-10)
 
 
