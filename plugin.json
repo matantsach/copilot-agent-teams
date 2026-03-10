@@ -2,6 +2,23 @@
   "name": "copilot-agent-teams",
   "description": "Multi-agent team coordination — shared task boards, messaging, and team orchestration",
   "version": "0.1.0",
+  "author": {
+    "name": "Matan Tsach",
+    "url": "https://github.com/matantsach"
+  },
+  "homepage": "https://github.com/matantsach/copilot-agent-teams",
+  "repository": "https://github.com/matantsach/copilot-agent-teams",
+  "license": "MIT",
+  "keywords": [
+    "copilot",
+    "multi-agent",
+    "mcp",
+    "agent-teams",
+    "coordination",
+    "task-board",
+    "team-orchestration"
+  ],
+  "category": "agents",
   "agents": "agents/",
   "skills": ["skills/"],
   "hooks": "hooks.json",
