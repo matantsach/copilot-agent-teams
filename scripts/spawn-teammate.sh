@@ -49,6 +49,8 @@ if command -v tmux &>/dev/null && can_use_tmux; then
          git worktree add "$WORKTREE_DIR" "$BRANCH_NAME" 2>/dev/null; then
         WORK_DIR="$WORKTREE_DIR"
         WORKTREE_INFO=" with worktree (branch: $BRANCH_NAME)"
+      else
+        echo "WARNING: worktree creation failed — teammates will share the working directory" >&2
       fi
     else
       WORK_DIR="$WORKTREE_DIR"
@@ -59,7 +61,7 @@ if command -v tmux &>/dev/null && can_use_tmux; then
   TEAMMATE_PROMPT="$PROMPT" tmux split-window -h -c "$WORK_DIR" -e "TEAMMATE_PROMPT=$PROMPT" \
     "copilot -a teammate -m '$MODEL' \"\$TEAMMATE_PROMPT\""
   tmux select-layout tiled
-  echo "WORKTREE_PATH=$WORK_DIR"
+  echo "WORK_DIR=$WORK_DIR"
   echo "Spawned $AGENT_ID in tmux pane${WORKTREE_INFO} (model: $MODEL)"
 else
   echo "NOT_IN_TMUX"

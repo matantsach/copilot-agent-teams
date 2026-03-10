@@ -17,5 +17,6 @@ Stop an active team and present the collected results.
    - Count of incomplete tasks (if any)
    - Overall outcome relative to the original goal
 5. Clean up worktrees:
-   - Run `bash scripts/cleanup-worktrees.sh <team_id>` to remove teammate worktrees
+   - Run `bash <path-to-cleanup> <team_id>` to remove teammate worktrees,
+     where `<path-to-cleanup>` is the absolute path to [cleanup-worktrees.sh](../../scripts/cleanup-worktrees.sh)
    - Report which branches were created (users may want to review/merge them)
