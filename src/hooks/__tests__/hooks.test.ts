@@ -67,14 +67,61 @@ describe("Hooks", () => {
       expect(output).toBe("");
     });
 
-    it("outputs reminder when active teams exist", () => {
+    it("outputs nothing when active team has no actionable items", () => {
       const dbDir = join(tmpDir, ".copilot-teams");
       mkdirSync(dbDir);
       const db = new TeamDB(join(dbDir, "teams.db"));
       db.createTeam("Test");
       db.close();
       const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
-      expect(output).toContain("get_messages");
+      expect(output).toBe("");
+    });
+
+    it("shows unread message count for the lead", () => {
+      const dbDir = join(tmpDir, ".copilot-teams");
+      mkdirSync(dbDir);
+      const db = new TeamDB(join(dbDir, "teams.db"));
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.sendMessage(team.id, "teammate-1", "lead", "Help?");
+      db.sendMessage(team.id, "teammate-1", "lead", "Stuck on X");
+      db.close();
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
+      expect(output).toContain("2 unread");
+      expect(output).toContain("monitor_teammates");
+    });
+
+    it("shows blocked task count for escalation", () => {
+      const dbDir = join(tmpDir, ".copilot-teams");
+      mkdirSync(dbDir);
+      const db = new TeamDB(join(dbDir, "teams.db"));
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "blocked");
+      db.close();
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
+      expect(output).toContain("1 blocked");
+      expect(output).toContain("monitor_teammates");
+    });
+
+    it("shows combined summary when both unread and blocked", () => {
+      const dbDir = join(tmpDir, ".copilot-teams");
+      mkdirSync(dbDir);
+      const db = new TeamDB(join(dbDir, "teams.db"));
+      const team = db.createTeam("Test");
+      db.addMember(team.id, "lead", "lead");
+      db.addMember(team.id, "teammate-1", "teammate");
+      db.sendMessage(team.id, "teammate-1", "lead", "Question");
+      const task = db.createTask(team.id, "Do thing");
+      db.claimTask(task.id, "teammate-1");
+      db.updateTask(task.id, "blocked");
+      db.close();
+      const output = execSync(`npx tsx ${nudgeMessagesScript}`, { cwd: tmpDir, encoding: "utf8" });
+      expect(output).toContain("1 unread");
+      expect(output).toContain("1 blocked");
     });
   });
 });
