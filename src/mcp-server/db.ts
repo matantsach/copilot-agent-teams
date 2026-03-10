@@ -263,6 +263,9 @@ export class TeamDB {
       const now = Date.now();
       if (effectiveStatus === "completed") {
         this.db.run("UPDATE tasks SET status = ?, result = ?, completed_at = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, now, id]);
+      } else if (effectiveStatus === "blocked" && task.status === "in_progress") {
+        // Escalation block: clear blocked_by so hook detects this as escalation, not dependency wait
+        this.db.run("UPDATE tasks SET status = ?, result = ?, blocked_by = NULL, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       } else {
         this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       }

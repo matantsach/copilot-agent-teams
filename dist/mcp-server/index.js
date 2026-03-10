@@ -31685,6 +31685,8 @@ var TeamDB = class _TeamDB {
       const now = Date.now();
       if (effectiveStatus === "completed") {
         this.db.run("UPDATE tasks SET status = ?, result = ?, completed_at = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, now, id]);
+      } else if (effectiveStatus === "blocked" && task.status === "in_progress") {
+        this.db.run("UPDATE tasks SET status = ?, result = ?, blocked_by = NULL, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       } else {
         this.db.run("UPDATE tasks SET status = ?, result = ?, updated_at = ? WHERE id = ?", [effectiveStatus, result ?? null, now, id]);
       }
