@@ -1,6 +1,6 @@
 {
   "name": "copilot-agent-teams",
-  "version": "0.1.0",
+  "version": "0.2.1",
   "description": "Multi-agent team coordination plugin for GitHub Copilot CLI",
   "type": "commonjs",
   "main": "dist/mcp-server/index.js",
