@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.4.2...copilot-agent-teams-v0.4.3) (2026-03-11)
+
+
+### Bug Fixes
+
+* use -i flag for interactive mode and fix model name format ([21f70d5](https://github.com/matantsach/copilot-agent-teams/commit/21f70d532f27b76c2fa19ff98fbf7124867ba3c1))
+
 ## [0.4.2](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.4.1...copilot-agent-teams-v0.4.2) (2026-03-11)
 
 
