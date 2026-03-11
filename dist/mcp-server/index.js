@@ -32359,7 +32359,8 @@ function createServer(dbPath) {
 // src/mcp-server/index.ts
 var import_fs2 = require("fs");
 var import_path2 = require("path");
-var dbDir = (0, import_path2.join)(process.cwd(), ".copilot-teams");
+var projectRoot = process.env.COPILOT_TEAMS_PROJECT_ROOT || process.cwd();
+var dbDir = (0, import_path2.join)(projectRoot, ".copilot-teams");
 (0, import_fs2.mkdirSync)(dbDir, { recursive: true });
 var { server, db } = createServer((0, import_path2.join)(dbDir, "teams.db"));
 function shutdown() {

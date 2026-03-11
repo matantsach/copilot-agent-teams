@@ -3,7 +3,8 @@ import { createServer } from "./server.js";
 import { mkdirSync } from "fs";
 import { join } from "path";
 
-const dbDir = join(process.cwd(), ".copilot-teams");
+const projectRoot = process.env.COPILOT_TEAMS_PROJECT_ROOT || process.cwd();
+const dbDir = join(projectRoot, ".copilot-teams");
 mkdirSync(dbDir, { recursive: true });
 
 const { server, db } = createServer(join(dbDir, "teams.db"));
