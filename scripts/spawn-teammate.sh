@@ -8,7 +8,7 @@ set -euo pipefail
 TEAM_ID="$1"
 AGENT_ID="$2"
 TASK_DESC="$3"
-MODEL="${4:-${TEAMMATE_MODEL:-claude-sonnet-4-6}}"
+MODEL="${4:-${TEAMMATE_MODEL:-claude-sonnet-4.6}}"
 
 PROMPT="You are $AGENT_ID on team $TEAM_ID. Register with register_teammate, then list_tasks, claim your work, and complete it. Task context: $TASK_DESC"
 
@@ -58,9 +58,9 @@ if command -v tmux &>/dev/null && can_use_tmux; then
     fi
   fi
 
-  # Write the prompt to a temp file so it can be safely read by tmux send-keys
-  # without quoting issues from special chars in task descriptions.
-  # The outer shell owns this file; cleanup via trap on exit.
+  # Write the prompt to a temp file to avoid quoting issues with special chars
+  # in task descriptions (quotes, backticks, dollar signs, etc.) passed through
+  # the nested tmux → login-shell → copilot invocation.
   PROMPT_FILE="$(mktemp)"
   trap 'rm -f "$PROMPT_FILE"' EXIT
   printf '%s\n' "$PROMPT" > "$PROMPT_FILE"
@@ -69,46 +69,19 @@ if command -v tmux &>/dev/null && can_use_tmux; then
   # homebrew, etc. that are set up in ~/.bashrc / ~/.zshrc. Without -l, "copilot"
   # may not be found — causing the pane to flash and close instantly.
   #
-  # We start copilot interactively (no -p flag) with --yolo so it auto-approves
-  # tool calls without confirmation prompts. The initial prompt is injected
-  # afterward via tmux send-keys, keeping the session fully interactive — the
-  # teammate runs its multi-step agent loop and the user can observe or intervene.
+  # copilot -i (--interactive) starts an interactive session and automatically
+  # executes the given prompt — the session stays alive for multi-step agent
+  # work afterward. Combined with --yolo (auto-approve all tool permissions),
+  # this gives the teammate a fully autonomous interactive session.
   #
   # The trailing echo+read keeps the pane open after copilot exits (whether
   # normally, by crash, or if the binary isn't found) so the user can review
   # output before the pane closes.
   SHELL_CMD="${SHELL:-/bin/bash}"
-  PANE_ID=$(tmux split-window -h -c "$WORK_DIR" -P -F '#{pane_id}' \
-    "$SHELL_CMD -lc 'copilot --agent=copilot-agent-teams/teammate --model \"$MODEL\" --yolo; echo \"[pane exited — press any key to close]\"; read -n1'") || {
-    echo "ERROR: failed to create tmux pane for $AGENT_ID" >&2
-    exit 1
-  }
+  tmux split-window -h -c "$WORK_DIR" \
+    "$SHELL_CMD -lc 'trap \"rm -f $PROMPT_FILE\" EXIT; copilot --agent copilot-agent-teams/teammate --model \"$MODEL\" --yolo -i \"\$(cat \"$PROMPT_FILE\")\"; echo \"[pane exited — press any key to close]\"; read -n1'"
 
-  # Wait for copilot to show its input prompt before injecting the task.
-  # Polls pane content instead of a fixed sleep to handle slow shell init,
-  # nvm loading, etc. without unnecessary delay on fast systems.
-  MAX_WAIT=30
-  for i in $(seq 1 $MAX_WAIT); do
-    if tmux capture-pane -t "$PANE_ID" -p 2>/dev/null | grep -q '>'; then
-      break
-    fi
-    if [ "$i" -eq "$MAX_WAIT" ]; then
-      echo "ERROR: copilot did not start within ${MAX_WAIT}s in pane for $AGENT_ID" >&2
-      exit 1
-    fi
-    sleep 1
-  done
-
-  # Send the prompt as literal text (-l) to avoid tmux interpreting substrings
-  # like "Enter", "Escape", "Tab", "C-c" as key names. Enter is sent separately.
-  PROMPT_TEXT="$(cat "$PROMPT_FILE")" || {
-    echo "ERROR: prompt file was deleted before it could be read (pane likely crashed)" >&2
-    exit 1
-  }
-  tmux send-keys -t "$PANE_ID" -l "$PROMPT_TEXT"
-  tmux send-keys -t "$PANE_ID" Enter
-
-  tmux select-layout tiled 2>/dev/null || true
+  tmux select-layout tiled
   echo "WORK_DIR=$WORK_DIR"
   echo "Spawned $AGENT_ID in tmux pane${WORKTREE_INFO} (model: $MODEL)"
 else
