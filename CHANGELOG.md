@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.4.1...copilot-agent-teams-v0.4.2) (2026-03-11)
+
+
+### Bug Fixes
+
+* copilot CLI flags and interactive mode in spawn-teammate ([#26](https://github.com/matantsach/copilot-agent-teams/issues/26)) ([e690ad0](https://github.com/matantsach/copilot-agent-teams/commit/e690ad0fe83f2a5d6569daf7a1ad010b6adb3efd))
+
 ## [0.4.1](https://github.com/matantsach/copilot-agent-teams/compare/copilot-agent-teams-v0.4.0...copilot-agent-teams-v0.4.1) (2026-03-10)
 
 
