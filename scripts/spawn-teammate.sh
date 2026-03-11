@@ -36,8 +36,9 @@ can_use_tmux() {
 }
 
 if command -v tmux &>/dev/null && can_use_tmux; then
-  WORK_DIR="$(pwd)"
+  PROJECT_ROOT="$(pwd)"
   WORKTREE_INFO=""
+  ADD_DIR_FLAG=""
 
   # Use git worktrees for file isolation when available
   if is_git_repo; then
@@ -47,13 +48,13 @@ if command -v tmux &>/dev/null && can_use_tmux; then
       mkdir -p "$(dirname "$WORKTREE_DIR")"
       if git worktree add "$WORKTREE_DIR" -b "$BRANCH_NAME" 2>/dev/null || \
          git worktree add "$WORKTREE_DIR" "$BRANCH_NAME" 2>/dev/null; then
-        WORK_DIR="$(cd "$WORKTREE_DIR" && pwd)"
+        ADD_DIR_FLAG="--add-dir \"$(cd "$WORKTREE_DIR" && pwd)\""
         WORKTREE_INFO=" with worktree (branch: $BRANCH_NAME)"
       else
         echo "WARNING: worktree creation failed — teammates will share the working directory" >&2
       fi
     else
-      WORK_DIR="$(cd "$WORKTREE_DIR" && pwd)"
+      ADD_DIR_FLAG="--add-dir \"$(cd "$WORKTREE_DIR" && pwd)\""
       WORKTREE_INFO=" with worktree (branch: $BRANCH_NAME)"
     fi
   fi
@@ -61,28 +62,32 @@ if command -v tmux &>/dev/null && can_use_tmux; then
   # Write the prompt to a temp file to avoid quoting issues with special chars
   # in task descriptions (quotes, backticks, dollar signs, etc.) passed through
   # the nested tmux → login-shell → copilot invocation.
+  # Only the inner shell reads and cleans up this file via trap.
   PROMPT_FILE="$(mktemp)"
-  trap 'rm -f "$PROMPT_FILE"' EXIT
   printf '%s\n' "$PROMPT" > "$PROMPT_FILE"
 
-  # Use a login shell (-l) so PATH includes tools installed via nvm, npm global,
-  # homebrew, etc. that are set up in ~/.bashrc / ~/.zshrc. Without -l, "copilot"
-  # may not be found — causing the pane to flash and close instantly.
+  # Launch copilot from the PROJECT ROOT (not the worktree) so that:
+  #   1. The workspace trust prompt is skipped (project root is already trusted)
+  #   2. The MCP server finds the shared .copilot-teams/teams.db
+  # File access to the worktree is granted via --add-dir.
   #
   # copilot -i (--interactive) starts an interactive session and automatically
   # executes the given prompt — the session stays alive for multi-step agent
   # work afterward. Combined with --yolo (auto-approve all tool permissions),
   # this gives the teammate a fully autonomous interactive session.
   #
+  # Use a login shell (-l) so PATH includes tools installed via nvm, npm global,
+  # homebrew, etc. Without -l, "copilot" may not be found.
+  #
   # The trailing echo+read keeps the pane open after copilot exits (whether
   # normally, by crash, or if the binary isn't found) so the user can review
   # output before the pane closes.
   SHELL_CMD="${SHELL:-/bin/bash}"
-  tmux split-window -h -c "$WORK_DIR" \
-    "$SHELL_CMD -lc 'trap \"rm -f $PROMPT_FILE\" EXIT; copilot --agent copilot-agent-teams/teammate --model \"$MODEL\" --yolo -i \"\$(cat \"$PROMPT_FILE\")\"; echo \"[pane exited — press any key to close]\"; read -n1'"
+  tmux split-window -h -c "$PROJECT_ROOT" \
+    "$SHELL_CMD -lc 'export COPILOT_TEAMS_PROJECT_ROOT=\"$PROJECT_ROOT\"; trap \"rm -f $PROMPT_FILE\" EXIT; copilot --agent copilot-agent-teams/teammate --model \"$MODEL\" --yolo $ADD_DIR_FLAG -i \"\$(cat \"$PROMPT_FILE\")\"; echo \"[pane exited — press any key to close]\"; read -n1'"
 
-  tmux select-layout tiled
-  echo "WORK_DIR=$WORK_DIR"
+  tmux select-layout tiled 2>/dev/null || true
+  echo "WORK_DIR=$PROJECT_ROOT"
   echo "Spawned $AGENT_ID in tmux pane${WORKTREE_INFO} (model: $MODEL)"
 else
   echo "NOT_IN_TMUX"
